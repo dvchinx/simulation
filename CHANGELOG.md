@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.0 — 2026-06-12
+
+- **Genoma heredable:** cada organismo lleva un mini-genoma de 5 genes (`float32[5]`): velocidad, umbral de reproducción, eficiencia alimentaria, rango de visión y tasa de mutación. Grilla paralela `genome[y, x, 5]`.
+- **Visión inteligente en herbívoros:** los herbívoros escanean en 4 direcciones hasta su rango de visión genómico y sesgan el movimiento hacia la comida más cercana. Sin comida visible, caminan aleatoriamente.
+- **Visión variable en depredadores:** el rango de visión del depredador es ahora individual por genoma (antes fijo en 4). Depredadores con mayor visión cazan más eficientemente.
+- **Selección natural emergente:** la velocidad, la eficiencia y el umbral de reproducción crean presión selectiva real. Organismos con genes favorables sobreviven más y se reproducen antes.
+- **Velocidad como trade-off:** organismos más rápidos se mueven con mayor probabilidad por tick pero pagan más coste metabólico. El óptimo evolutivo depende de la densidad de pasto.
+- **Eficiencia alimentaria:** herbívoros ganan `FOOD_ENERGY_GAIN × eficiencia` por comer pasto; depredadores ganan `PREDATOR_ENERGY_FROM_PREY × eficiencia` por cada presa. Ambos genes evolucionan hacia arriba.
+- **Tasa de mutación como gen:** la mutación en cada cría se escala por el gen de tasa de mutación del padre. Alta mutación → evolución rápida pero inestable; baja → estabilidad.
+- **Panel de evolución:** sidebar muestra los 5 genes medios por especie en tiempo real, permitiendo observar la evolución generación a generación.
+
 ## v1.0.0 — 2026-06-11
 
 - **Caza dirigida:** los depredadores escanean 8 celdas en cada una de las 4 direcciones cardinales y se mueven hacia la presa más cercana (puntuación 1/distancia). Empates se rompen aleatoriamente. Si no detectan presa en ningún rango, siguen movimiento aleatorio. Algoritmo completamente vectorizado con NumPy — sin loops Python por celda.

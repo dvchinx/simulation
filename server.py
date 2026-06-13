@@ -4,11 +4,17 @@ import sys
 import numpy as np
 import websockets
 from simulation import create_state, tick, build_render
-from config import FPS, SPECIES_COLORS, GRID_WIDTH, GRID_HEIGHT
+from config import FPS, SPECIES_COLORS, GRID_WIDTH, GRID_HEIGHT, N_GENES
 
 clients = set()
 sim_state = None
 tick_count = 0
+
+
+def _mean_genes(mask):
+    if not np.any(mask):
+        return [0.0] * N_GENES
+    return [round(float(v), 3) for v in sim_state["genome"][mask].mean(axis=0)]
 
 
 def _stats():
@@ -21,6 +27,9 @@ def _stats():
         "herb_b":    int(np.sum(sp == 3)),
         "infected":  int(np.sum(sim_state["infected"] > 0)),
         "food":      int(np.sum((sim_state["food"] > 0) & (sp == 0))),
+        "genome_a":  _mean_genes(sp == 1),
+        "genome_p":  _mean_genes(sp == 2),
+        "genome_b":  _mean_genes(sp == 3),
     })
 
 

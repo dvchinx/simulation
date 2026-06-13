@@ -5,6 +5,8 @@ from config import (
     HERBIVORE_B_POPULATION, HERBIVORE_B_INITIAL_ENERGY,
     PREDATOR_POPULATION, PREDATOR_INITIAL_ENERGY,
     INITIAL_FOOD_DENSITY, INFECTION_START_COUNT,
+    N_GENES, GENOME_MIN, GENOME_MAX,
+    GENOME_HERBIVORE, GENOME_PREDATOR, GENOME_INIT_NOISE,
 )
 from rules import random_walk, food as food_rule, aging, reproduction
 from rules import predation, infection as infection_rule
@@ -53,7 +55,16 @@ def create_state():
         for i in seeds:
             infected[herb_pos[i, 0], herb_pos[i, 1]] = 1
 
-    return {"species": species, "energy": energy, "age": age, "food": food, "infected": infected}
+    # genoma: variación inicial pequeña alrededor de los valores por defecto
+    genome = np.zeros((GRID_HEIGHT, GRID_WIDTH, N_GENES), dtype=np.float32)
+    for sp_id, defaults in [(1, GENOME_HERBIVORE), (2, GENOME_PREDATOR), (3, GENOME_HERBIVORE)]:
+        mask = species == sp_id
+        n = int(np.sum(mask))
+        if n > 0:
+            noise = np.random.randn(n, N_GENES).astype(np.float32) * GENOME_INIT_NOISE
+            genome[mask] = np.clip(defaults + noise, GENOME_MIN, GENOME_MAX)
+
+    return {"species": species, "energy": energy, "age": age, "food": food, "infected": infected, "genome": genome}
 
 
 def tick(state):

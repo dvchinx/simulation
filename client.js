@@ -13,6 +13,22 @@ let colorMap = {};
 
 function pct(n) { return (n / TOTAL_CELLS * 100).toFixed(1) + '%'; }
 
+const GENE_FMT = [
+  v => v.toFixed(2),   // velocidad
+  v => v.toFixed(0),   // reprod.
+  v => v.toFixed(2),   // eficiencia
+  v => v.toFixed(1),   // visión
+  v => v.toFixed(3),   // mutación
+];
+
+function updateGenes(prefix, genes) {
+  if (!genes) return;
+  genes.forEach((v, i) => {
+    const el = document.getElementById(`e${prefix}-${i}`);
+    if (el) el.textContent = GENE_FMT[i](v);
+  });
+}
+
 function updateStats(msg) {
   document.getElementById('tick-display').textContent = `Tick ${msg.tick}`;
   document.getElementById('herb-a-count').textContent = msg.herb_a;
@@ -25,6 +41,9 @@ function updateStats(msg) {
   document.getElementById('herb-b-bar').style.width = pct(msg.herb_b);
   document.getElementById('infected-bar').style.width = pct(msg.infected);
   document.getElementById('food-bar').style.width = pct(msg.food);
+  updateGenes('a', msg.genome_a);
+  updateGenes('p', msg.genome_p);
+  updateGenes('b', msg.genome_b);
 }
 
 function render(bytes) {

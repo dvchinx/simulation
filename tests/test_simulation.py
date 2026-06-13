@@ -8,6 +8,7 @@ from config import (
     INITIAL_POPULATION, INITIAL_ENERGY,
     HERBIVORE_B_POPULATION, HERBIVORE_B_INITIAL_ENERGY,
     PREDATOR_POPULATION, PREDATOR_INITIAL_ENERGY,
+    N_GENES,
 )
 
 VALID_SPECIES = {0, 1, 2, 3}
@@ -15,13 +16,16 @@ VALID_SPECIES = {0, 1, 2, 3}
 
 def test_state_keys():
     state = create_state()
-    assert set(state.keys()) == {"species", "energy", "age", "food", "infected"}
+    assert set(state.keys()) == {"species", "energy", "age", "food", "infected", "genome"}
 
 
 def test_grid_shape():
     state = create_state()
-    for grid in state.values():
-        assert grid.shape == (GRID_HEIGHT, GRID_WIDTH)
+    for key, grid in state.items():
+        if key == "genome":
+            assert grid.shape == (GRID_HEIGHT, GRID_WIDTH, N_GENES)
+        else:
+            assert grid.shape == (GRID_HEIGHT, GRID_WIDTH)
 
 
 def test_initial_population():
