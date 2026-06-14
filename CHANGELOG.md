@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.0.0 — 2026-06-14
+
+- **Feromonas y quimiotaxis:** cada organismo deposita una traza química en la celda que ocupa. Las feromonas se difunden a las celdas vecinas mediante un stencil de 5 puntos y decaen exponencialmente (~15% por tick). Los herbívoros siguen el rastro propio de su especie (`PHEROMONE_HERB_ATTRACTION = 0.5`), lo que genera autopistas emergentes y migración en grupo. Los depredadores rastrean la feromona combinada de ambas especies presa (`PHEROMONE_PRED_ATTRACTION = 0.7`), permitiendo caza en zonas recientemente visitadas aunque no haya presa en línea de visión. Implementación: grilla `pheromone[y, x, 3] = float32` con capa por especie.
+
+- **Cardumen / Bandada (Flocking):** los herbívoros aplican reglas de cardumen con dos fuerzas opuestas — cohesión (atracción hacia el centro de masa de congéneres en radio 6, ponderada por distancia) y separación (repulsión de congéneres a radio 2). El resultado es movimiento en grupo con espaciado natural: organismos forman bandadas que se desplazan juntas sin control central. Herbívoro A y B forman cardúmenes independientes. Implementación: `rules/flocking.py` precomputa campos vectoriales `(H, W, 4)` de puntuación direccional cada tick.
+
+- **Comportamiento territorial:** cada organismo "marca" la celda que ocupa con una señal territorial de decaimiento muy lento (~0.5% por tick → persiste ~200 ticks). Los herbívoros se sienten atraídos hacia su propio territorio (`TERRITORY_ATTRACTION = 0.15`) y huyen del territorio del depredador (`TERRITORY_FEAR_WEIGHT = 0.30`), creando zonas de seguridad y zonas de peligro visibles. Implementación: grilla `territory[y, x, 3] = float32`.
+
+- **Visualización de capas:** el canvas muestra rastros de feromona en tonos tenues sobre celdas vacías (verde para herb_a, rojo para predadores, azul para herb_b), y marcas territoriales en tonos aún más apagados debajo. Prioridad de renderizado: organismos > infectados > pasto > feromona > territorio. Sidebar añade contador de celdas territoriales por especie en tiempo real.
+
+- **Integración de señales en el movimiento:** los herbívoros combinan en un solo vector de puntuación por dirección: comida visible (score dominante, 0–1.0), feromona propia (hasta 0.5), cohesión/separación de cardumen, y atracción/miedo territorial. El argmax del vector combinado determina el movimiento. Sin ninguna señal, el movimiento sigue siendo aleatorio.
+
+
+
 ## v1.1.0 — 2026-06-12
 
 - **Genoma heredable:** cada organismo lleva un mini-genoma de 5 genes (`float32[5]`): velocidad, umbral de reproducción, eficiencia alimentaria, rango de visión y tasa de mutación. Grilla paralela `genome[y, x, 5]`.

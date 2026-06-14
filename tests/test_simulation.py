@@ -14,9 +14,18 @@ from config import (
 VALID_SPECIES = {0, 1, 2, 3}
 
 
+_BASE_KEYS = {"species", "energy", "age", "food", "infected", "genome"}
+_PHASE4_KEYS = {"pheromone", "territory", "flock_a", "flock_b"}
+# Grillas con 3 capas (una por especie)
+_LAYERED_3 = {"pheromone", "territory"}
+# Grillas con 4 capas (una por dirección)
+_LAYERED_4 = {"flock_a", "flock_b"}
+
+
 def test_state_keys():
     state = create_state()
-    assert set(state.keys()) == {"species", "energy", "age", "food", "infected", "genome"}
+    assert _BASE_KEYS <= set(state.keys())
+    assert _PHASE4_KEYS <= set(state.keys())
 
 
 def test_grid_shape():
@@ -24,6 +33,10 @@ def test_grid_shape():
     for key, grid in state.items():
         if key == "genome":
             assert grid.shape == (GRID_HEIGHT, GRID_WIDTH, N_GENES)
+        elif key in _LAYERED_3:
+            assert grid.shape == (GRID_HEIGHT, GRID_WIDTH, 3)
+        elif key in _LAYERED_4:
+            assert grid.shape == (GRID_HEIGHT, GRID_WIDTH, 4)
         else:
             assert grid.shape == (GRID_HEIGHT, GRID_WIDTH)
 

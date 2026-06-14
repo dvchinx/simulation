@@ -13,7 +13,7 @@ FOOD_ENERGY_GAIN = 20
 MAX_AGE = 150
 
 # --- Herbívoro B (competidor azul) ---
-HERBIVORE_B_POPULATION = 150
+HERBIVORE_B_POPULATION = 300
 HERBIVORE_B_INITIAL_ENERGY = 30
 
 # --- Depredador (rojo) ---
@@ -28,7 +28,7 @@ PREDATOR_VISION_RANGE = 4          # radio menor → refugio espacial para las p
 
 # --- Pasto ---
 INITIAL_FOOD_DENSITY = 0.4
-FOOD_REGEN_RATE = 0.02             # más rápido → presas se recuperan antes
+FOOD_REGEN_RATE = 0.03             # más rápido → presas se recuperan antes
 
 # --- Infección ---
 INFECTION_START_COUNT = 20
@@ -60,4 +60,33 @@ SPECIES_COLORS = {
     5:  [200, 200, 0  ],  # herbívoro A infectado (amarillo)
     6:  [200, 120, 0  ],  # herbívoro B infectado (naranja)
     10: [30,  80,  30 ],  # pasto
+    # --- Fase 4: feromonas (rastros en celdas vacías) ---
+    11: [0,   85,  42 ],  # feromona herbívoro A (verde tenue)
+    12: [105, 25,  25 ],  # feromona depredador (rojo tenue)
+    13: [25,  58,  115],  # feromona herbívoro B (azul tenue)
+    # --- Fase 4: territorio (marca persistente debajo de feromonas) ---
+    20: [0,   48,  24 ],  # territorio herbívoro A (verde muy tenue)
+    21: [58,  14,  14 ],  # territorio depredador (rojo muy tenue)
+    22: [14,  32,  68 ],  # territorio herbívoro B (azul muy tenue)
 }
+
+# --- Fase 4: Feromonas ---
+PHEROMONE_DEPOSIT          = 0.30   # concentración añadida por organismo por tick
+PHEROMONE_DECAY            = 0.85   # fracción que permanece tras cada tick
+PHEROMONE_DIFFUSION        = 0.08   # fracción que se difunde a cada vecino cardinal
+PHEROMONE_HERB_ATTRACTION  = 0.50   # peso en dir_scores para herbívoros (propio rastro)
+PHEROMONE_PRED_ATTRACTION  = 0.70   # depredadores rastrean feromona combinada de presas
+PHEROMONE_RENDER_THRESHOLD = 0.06   # umbral mínimo para pintar rastro en canvas
+
+# --- Fase 4: Cardumen / Bandada (Flocking) ---
+FLOCK_RADIUS            = 6    # radio de cohesión en celdas
+FLOCK_COHESION_WEIGHT   = 0.25 # atracción hacia el centro de masa del cardumen
+FLOCK_SEPARATION_RADIUS = 2    # radio de separación (evitar apiñamiento)
+FLOCK_SEPARATION_WEIGHT = 0.60 # repulsión de congéneres demasiado cercanos
+
+# --- Fase 4: Territorio ---
+TERRITORY_DEPOSIT           = 0.06  # marca territorial depositada por tick
+TERRITORY_DECAY             = 0.995 # decaimiento lento → territorio persistente
+TERRITORY_ATTRACTION        = 0.15  # peso en dir_scores para moverse hacia propio territorio
+TERRITORY_FEAR_WEIGHT       = 0.30  # herbívoros huyen del territorio del depredador
+TERRITORY_RENDER_THRESHOLD  = 0.12  # umbral para pintar territorio en canvas

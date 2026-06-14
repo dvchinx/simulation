@@ -3,6 +3,7 @@ from config import (
     GRID_WIDTH, GRID_HEIGHT,
     PREDATOR_MOVE_COST, PREDATOR_MAX_ENERGY, PREDATOR_ENERGY_FROM_PREY,
     GENE_VISION, GENE_FOOD_EFFICIENCY,
+    PHEROMONE_PRED_ATTRACTION,
 )
 
 _DIRECTIONS = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]], dtype=np.int32)
@@ -34,6 +35,18 @@ def apply(state):
             unset  = dir_scores[:, d_idx] == 0
             found  = unset & within & prey[look_y, look_x]
             dir_scores[found, d_idx] = 1.0 / dist
+
+    # --- Fase 4: rastreo de feromona de presas (quimiotaxis de caza) ---
+    # Los depredadores siguen el rastro químico combinado de herbívoros A y B,
+    # lo que les permite cazar en zonas recientemente visitadas aunque no haya
+    # presa en línea de visión directa.
+    if "pheromone" in state:
+        prey_ph = state["pheromone"][:, :, 0] + state["pheromone"][:, :, 2]
+        for d_idx in range(4):
+            dy, dx = _DIRECTIONS[d_idx]
+            ny = np.clip(predators[:, 0] + dy, 0, GRID_HEIGHT - 1)
+            nx = np.clip(predators[:, 1] + dx, 0, GRID_WIDTH - 1)
+            dir_scores[:, d_idx] += PHEROMONE_PRED_ATTRACTION * prey_ph[ny, nx]
 
     dir_scores += np.random.uniform(0, 1e-4, dir_scores.shape)
     no_prey    = np.all(dir_scores <= 1e-4, axis=1)

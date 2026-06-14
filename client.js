@@ -44,6 +44,12 @@ function updateStats(msg) {
   updateGenes('a', msg.genome_a);
   updateGenes('p', msg.genome_p);
   updateGenes('b', msg.genome_b);
+  // Fase 4: territorio
+  if (msg.territory_a !== undefined) {
+    document.getElementById('ter-a').textContent = msg.territory_a;
+    document.getElementById('ter-p').textContent = msg.territory_p;
+    document.getElementById('ter-b').textContent = msg.territory_b;
+  }
 }
 
 function render(bytes) {

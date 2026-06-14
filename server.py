@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import websockets
 from simulation import create_state, tick, build_render
-from config import FPS, SPECIES_COLORS, GRID_WIDTH, GRID_HEIGHT, N_GENES
+from config import FPS, SPECIES_COLORS, GRID_WIDTH, GRID_HEIGHT, N_GENES, TERRITORY_RENDER_THRESHOLD
 
 clients = set()
 sim_state = None
@@ -19,7 +19,7 @@ def _mean_genes(mask):
 
 def _stats():
     sp = sim_state["species"]
-    return json.dumps({
+    stats = {
         "type":      "stats",
         "tick":      tick_count,
         "herb_a":    int(np.sum(sp == 1)),
@@ -30,7 +30,17 @@ def _stats():
         "genome_a":  _mean_genes(sp == 1),
         "genome_p":  _mean_genes(sp == 2),
         "genome_b":  _mean_genes(sp == 3),
-    })
+    }
+    # Fase 4: celdas con territorio dominante por especie
+    if "territory" in sim_state:
+        ter = sim_state["territory"]
+        ter_max   = np.max(ter, axis=2)
+        ter_which = np.argmax(ter, axis=2)
+        strong = ter_max >= TERRITORY_RENDER_THRESHOLD
+        stats["territory_a"] = int(np.sum(strong & (ter_which == 0)))
+        stats["territory_p"] = int(np.sum(strong & (ter_which == 1)))
+        stats["territory_b"] = int(np.sum(strong & (ter_which == 2)))
+    return json.dumps(stats)
 
 
 async def simulation_loop():
