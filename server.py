@@ -1,14 +1,22 @@
 import asyncio
+import base64
 import json
 import sys
 import numpy as np
 import websockets
 from simulation import create_state, tick, build_render
-from config import FPS, SPECIES_COLORS, GRID_WIDTH, GRID_HEIGHT, N_GENES, TERRITORY_RENDER_THRESHOLD
+from config import FPS, SPECIES_COLORS, GRID_WIDTH, GRID_HEIGHT, N_GENES, TERRITORY_RENDER_THRESHOLD, SEASON_PERIOD
 
 clients = set()
 sim_state = None
-tick_count = 0
+
+
+def _season_name(tick_count):
+    phase = (tick_count % SEASON_PERIOD) / SEASON_PERIOD
+    if phase < 0.25: return "Primavera"
+    if phase < 0.50: return "Verano"
+    if phase < 0.75: return "Otoño"
+    return "Invierno"
 
 
 def _mean_genes(mask):
@@ -19,19 +27,21 @@ def _mean_genes(mask):
 
 def _stats():
     sp = sim_state["species"]
+    tick_count = sim_state.get("tick_count", 0)
     stats = {
-        "type":      "stats",
-        "tick":      tick_count,
-        "herb_a":    int(np.sum(sp == 1)),
-        "predators": int(np.sum(sp == 2)),
-        "herb_b":    int(np.sum(sp == 3)),
-        "infected":  int(np.sum(sim_state["infected"] > 0)),
-        "food":      int(np.sum((sim_state["food"] > 0) & (sp == 0))),
-        "genome_a":  _mean_genes(sp == 1),
-        "genome_p":  _mean_genes(sp == 2),
-        "genome_b":  _mean_genes(sp == 3),
+        "type":        "stats",
+        "tick":        tick_count,
+        "herb_a":      int(np.sum(sp == 1)),
+        "predators":   int(np.sum(sp == 2)),
+        "herb_b":      int(np.sum(sp == 3)),
+        "infected":    int(np.sum(sim_state["infected"] > 0)),
+        "food":        int(np.sum((sim_state["food"] > 0) & (sp == 0))),
+        "genome_a":    _mean_genes(sp == 1),
+        "genome_p":    _mean_genes(sp == 2),
+        "genome_b":    _mean_genes(sp == 3),
+        "temperature": round(float(sim_state.get("global_temperature", 0.0)), 3),
+        "season":      _season_name(tick_count),
     }
-    # Fase 4: celdas con territorio dominante por especie
     if "territory" in sim_state:
         ter = sim_state["territory"]
         ter_max   = np.max(ter, axis=2)
@@ -44,11 +54,10 @@ def _stats():
 
 
 async def simulation_loop():
-    global sim_state, tick_count, clients
+    global sim_state, clients
     interval = 1.0 / FPS
     while True:
         sim_state = tick(sim_state)
-        tick_count += 1
 
         if clients:
             stats_msg = _stats()
@@ -65,6 +74,16 @@ async def simulation_loop():
         await asyncio.sleep(interval)
 
 
+def _biome_frame_b64():
+    """Construye el frame de heatmap de bioma (bioma + terreno superpuesto), base64."""
+    biome_display = (sim_state["biome"] + 60).astype(np.uint8)
+    terrain = sim_state["terrain"]
+    biome_display[terrain == 1] = 30  # agua sobre bioma
+    biome_display[terrain == 2] = 31  # roca
+    biome_display[terrain == 3] = 32  # pantano
+    return base64.b64encode(biome_display.tobytes()).decode()
+
+
 async def handler(websocket):
     clients.add(websocket)
     try:
@@ -73,6 +92,7 @@ async def handler(websocket):
             "width":  GRID_WIDTH,
             "height": GRID_HEIGHT,
             "colors": {str(k): v for k, v in SPECIES_COLORS.items()},
+            "biome":  _biome_frame_b64(),
         }))
         await websocket.send(_stats())
         await websocket.send(build_render(sim_state).tobytes())

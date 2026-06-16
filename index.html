@@ -108,6 +108,24 @@
       font-size: 10px;
       color: #444;
     }
+    #heatmap-btn {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      padding: 6px 10px;
+      background: #222;
+      border: 1px solid #333;
+      color: #777;
+      font-family: monospace;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    #heatmap-btn:hover { background: #2a2a2a; color: #bbb; border-color: #444; }
+    #heatmap-btn.active { background: #122018; border-color: #2a6a3a; color: #00c864; }
 
     /* Mobile: layout vertical */
     @media (max-width: 640px) {
@@ -221,13 +239,23 @@
       </div>
 
       <div style="margin-top:12px">
-        <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Territorio — Fase 4</div>
+        <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Territorio</div>
         <div style="display:flex;gap:16px;font-size:11px;color:#888">
           <span><span style="color:#00c864">■</span> A: <span id="ter-a" style="color:#ccc">—</span></span>
           <span><span style="color:#dc3c3c">■</span> P: <span id="ter-p" style="color:#ccc">—</span></span>
           <span><span style="color:#3c8cdc">■</span> B: <span id="ter-b" style="color:#ccc">—</span></span>
         </div>
       </div>
+
+      <div style="margin-top:12px">
+        <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Ambiente</div>
+        <div style="display:flex;gap:16px;font-size:11px;color:#888">
+          <span id="season-display" style="color:#ccc">—</span>
+          <span>Temperatura: <span id="temp-display" style="color:#ccc">—</span></span>
+        </div>
+      </div>
+
+      <button id="heatmap-btn" disabled>Ver biomas</button>
     </div>
 
     <div class="sidebar-section" id="evolution-section">

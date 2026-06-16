@@ -4,16 +4,20 @@ from config import (
     PREDATOR_MOVE_COST, PREDATOR_MAX_ENERGY, PREDATOR_ENERGY_FROM_PREY,
     GENE_VISION, GENE_FOOD_EFFICIENCY,
     PHEROMONE_PRED_ATTRACTION,
+    TERRAIN_WATER_COST, TERRAIN_SWAMP_COST,
 )
 
 _DIRECTIONS = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]], dtype=np.int32)
-_MAX_VISION = 12  # techo global del rango de visión del genoma
+_MAX_VISION  = 12
+# Multiplicadores de costo metabólico por tipo de terreno [libre, agua, roca, pantano]
+_TERRAIN_COST = np.array([1.0, TERRAIN_WATER_COST, 1.0, TERRAIN_SWAMP_COST], dtype=np.float32)
 
 
 def apply(state):
     species = state["species"]
     energy  = state["energy"]
     genome  = state["genome"]
+    terrain = state.get("terrain")
 
     predators = np.argwhere(species == 2)
     if len(predators) == 0:
@@ -22,7 +26,6 @@ def apply(state):
     n    = len(predators)
     prey = (species == 1) | (species == 3)
 
-    # Rango de visión individual por genoma
     pred_vision = np.round(genome[predators[:, 0], predators[:, 1], GENE_VISION]).astype(np.int32)
     dir_scores  = np.zeros((n, 4), dtype=np.float32)
 
@@ -36,10 +39,7 @@ def apply(state):
             found  = unset & within & prey[look_y, look_x]
             dir_scores[found, d_idx] = 1.0 / dist
 
-    # --- Fase 4: rastreo de feromona de presas (quimiotaxis de caza) ---
-    # Los depredadores siguen el rastro químico combinado de herbívoros A y B,
-    # lo que les permite cazar en zonas recientemente visitadas aunque no haya
-    # presa en línea de visión directa.
+    # --- Fase 4: rastreo de feromona de presas ---
     if "pheromone" in state:
         prey_ph = state["pheromone"][:, :, 0] + state["pheromone"][:, :, 2]
         for d_idx in range(4):
@@ -61,6 +61,9 @@ def apply(state):
     target_sp       = species[targets[:, 0], targets[:, 1]]
     is_prey_target  = (target_sp == 1) | (target_sp == 3)
     is_empty_target = target_sp == 0
+    # --- Fase 5: roca infranqueable para depredadores también ---
+    if terrain is not None:
+        is_empty_target &= terrain[targets[:, 0], targets[:, 1]] != 2
 
     target_ids = targets[:, 0] * GRID_WIDTH + targets[:, 1]
     _, first_occ = np.unique(target_ids, return_index=True)
@@ -75,7 +78,6 @@ def apply(state):
     new_infected = state["infected"].copy()
     new_genome   = genome.copy()
 
-    # Comer: energía ganada escalada por gen de eficiencia alimentaria
     if np.any(eating):
         efficiency    = genome[predators[eating, 0], predators[eating, 1], GENE_FOOD_EFFICIENCY]
         energy_gained = np.minimum(
@@ -92,7 +94,6 @@ def apply(state):
         new_genome  [targets [eating, 0], targets [eating, 1]]   = genome[predators[eating, 0], predators[eating, 1]]
         new_genome  [predators[eating, 0], predators[eating, 1]] = 0
 
-    # Mover a celda vacía
     if np.any(moving):
         new_species [predators[moving, 0], predators[moving, 1]] = 0
         new_species [targets [moving, 0], targets [moving, 1]]   = 2
@@ -101,11 +102,21 @@ def apply(state):
         new_genome  [targets [moving, 0], targets [moving, 1]]   = genome[predators[moving, 0], predators[moving, 1]]
         new_genome  [predators[moving, 0], predators[moving, 1]] = 0
 
-    # Costo metabólico para todos los depredadores vivos
+    # --- Costo metabólico con modificador de terreno ---
     alive_pred = new_species == 2
-    new_energy[alive_pred] = np.maximum(
-        new_energy[alive_pred].astype(np.int16) - PREDATOR_MOVE_COST, 0
-    ).astype(np.uint8)
+    if np.any(alive_pred):
+        if terrain is not None:
+            terrain_mult = _TERRAIN_COST[terrain]
+            pred_cost = np.maximum(
+                np.round(PREDATOR_MOVE_COST * terrain_mult).astype(np.int16), 1
+            )
+            new_energy[alive_pred] = np.maximum(
+                new_energy[alive_pred].astype(np.int16) - pred_cost[alive_pred], 0
+            ).astype(np.uint8)
+        else:
+            new_energy[alive_pred] = np.maximum(
+                new_energy[alive_pred].astype(np.int16) - PREDATOR_MOVE_COST, 0
+            ).astype(np.uint8)
 
     starved = (new_species == 2) & (new_energy == 0)
     new_species[starved] = 0

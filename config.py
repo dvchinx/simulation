@@ -68,6 +68,19 @@ SPECIES_COLORS = {
     20: [0,   48,  24 ],  # territorio herbívoro A (verde muy tenue)
     21: [58,  14,  14 ],  # territorio depredador (rojo muy tenue)
     22: [14,  32,  68 ],  # territorio herbívoro B (azul muy tenue)
+    # --- Fase 5: terreno ---
+    30: [20,  60,  140],  # agua
+    31: [70,  70,  70 ],  # roca
+    32: [35,  55,  35 ],  # pantano
+    # --- Fase 5: perturbaciones ---
+    40: [220, 80,  10 ],  # fuego
+    41: [30,  60,  180],  # inundación
+    # --- Fase 5: contorno y heatmap de bioma ---
+    50: [100, 90,  85 ],  # contorno de bioma
+    60: [80,  160, 100],  # bioma templado
+    61: [60,  80,  180],  # bioma ártico
+    62: [180, 130, 40 ],  # bioma desierto
+    63: [30,  180, 80 ],  # bioma tropical
 }
 
 # --- Fase 4: Feromonas ---
@@ -90,3 +103,41 @@ TERRITORY_DECAY             = 0.995 # decaimiento lento → territorio persisten
 TERRITORY_ATTRACTION        = 0.15  # peso en dir_scores para moverse hacia propio territorio
 TERRITORY_FEAR_WEIGHT       = 0.30  # herbívoros huyen del territorio del depredador
 TERRITORY_RENDER_THRESHOLD  = 0.12  # umbral para pintar territorio en canvas
+
+# --- Fase 5: Temperatura / Estaciones ---
+SEASON_PERIOD        = 400     # ticks por ciclo completo (4 estaciones)
+SEASON_AMPLITUDE     = 0.85    # temperatura pico (rango -0.85 a +0.85)
+TEMP_SPEED_FACTOR    = 0.40    # penalización de velocidad en extremos
+TEMP_REPRO_PENALTY   = 30.0    # energía extra requerida para reproducirse en extremos
+TEMP_REGEN_FACTOR    = 0.65    # reducción de regen de pasto en extremos
+
+# Offsets de temperatura por bioma: [templado, ártico, desierto, tropical]
+BIOME_TEMP_OFFSET = np.array([0.0, -0.50,  0.50, 0.20], dtype=np.float32)
+# Multiplicadores de regen de pasto por bioma
+BIOME_REGEN_MULT  = np.array([1.0,  0.40,  0.30, 1.80], dtype=np.float32)
+
+# --- Fase 5: Terreno ---
+TERRAIN_SMOOTH_ITER = 25    # iteraciones de suavizado para patches de terreno
+BIOME_SMOOTH_ITER   = 40    # mayor escala para patches de bioma
+WATER_THRESHOLD     = 0.18  # valor de ruido por debajo del cual hay agua
+ROCK_THRESHOLD      = 0.80  # valor de ruido por encima del cual hay roca
+SWAMP_MIN           = 0.65  # rango de pantano
+SWAMP_MAX           = 0.80
+TERRAIN_WATER_COST  = 1.6   # multiplicador de costo metabólico en agua
+TERRAIN_SWAMP_COST  = 1.3   # multiplicador de costo metabólico en pantano
+
+# --- Fase 5: Difusión de nutrientes ---
+NUTRIENT_DEPOSIT     = 0.40   # depósito de nutriente por celda de pasto por tick
+NUTRIENT_DIFFUSION   = 0.05   # fracción difundida a vecinos cardinales (D <= 0.25)
+NUTRIENT_DECAY       = 0.92   # fracción que permanece tras cada tick
+NUTRIENT_REGEN_BOOST = 0.04   # probabilidad extra de regen donde hay nutriente alto
+NUTRIENT_CHEMOTAXIS  = 0.12   # peso en dir_scores por gradiente de nutriente
+
+# --- Fase 5: Perturbaciones ---
+FIRE_PERIOD  = 500    # ticks entre eventos de fuego
+FIRE_RADIUS  = 12     # radio del incendio en celdas
+FIRE_DECAY   = 0.95   # decaimiento visual por tick
+FLOOD_PERIOD = 750    # ticks entre inundaciones
+FLOOD_WIDTH  = 10     # semiancho de la franja de inundación
+FLOOD_DECAY  = 0.93   # decaimiento visual por tick
+DISTURBANCE_THRESHOLD = 0.08  # umbral mínimo para pintar perturbación en canvas

@@ -1,6 +1,7 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
+const heatmapBtn = document.getElementById('heatmap-btn');
 
 const TOTAL_CELLS = 200 * 200;
 const WS_URL = window.location.protocol === 'https:'
@@ -10,6 +11,16 @@ const WS_URL = window.location.protocol === 'https:'
 let width = 200;
 let height = 200;
 let colorMap = {};
+let biomeFrame = null;
+let renderMode = 'live';  // 'live' | 'biome'
+
+heatmapBtn.addEventListener('click', () => {
+  if (!biomeFrame) return;
+  renderMode = renderMode === 'live' ? 'biome' : 'live';
+  heatmapBtn.classList.toggle('active', renderMode === 'biome');
+  heatmapBtn.textContent = renderMode === 'biome' ? 'Ver simulación' : 'Ver biomas';
+  if (renderMode === 'biome') render(biomeFrame);
+});
 
 function pct(n) { return (n / TOTAL_CELLS * 100).toFixed(1) + '%'; }
 
@@ -50,6 +61,12 @@ function updateStats(msg) {
     document.getElementById('ter-p').textContent = msg.territory_p;
     document.getElementById('ter-b').textContent = msg.territory_b;
   }
+  // Fase 5: ambiente
+  if (msg.season !== undefined) {
+    document.getElementById('season-display').textContent = msg.season;
+    const t = msg.temperature;
+    document.getElementById('temp-display').textContent = (t >= 0 ? '+' : '') + t.toFixed(2);
+  }
 }
 
 function render(bytes) {
@@ -83,11 +100,18 @@ function connect() {
         for (const [k, v] of Object.entries(msg.colors)) {
           colorMap[parseInt(k)] = v;
         }
+        if (msg.biome) {
+          const raw = atob(msg.biome);
+          biomeFrame = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) biomeFrame[i] = raw.charCodeAt(i);
+          heatmapBtn.disabled = false;
+        }
       } else if (msg.type === 'stats') {
         updateStats(msg);
       }
     } else {
-      render(new Uint8Array(event.data));
+      const bytes = new Uint8Array(event.data);
+      render(renderMode === 'biome' && biomeFrame ? biomeFrame : bytes);
     }
   };
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.0.0 — 2026-06-16
+
+- **Terreno variable:** el grid se genera con ruido aleatorio suavizado (25 iteraciones de promedio de vecinos) que produce zonas orgánicas de agua (azul), roca (gris) y pantano (verde oscuro). La roca es infranqueable para cualquier especie; agua y pantano elevan el costo metabólico de moverse (×1.6 y ×1.3 respectivamente). Las crías no pueden nacer en roca. El pasto no regenera en roca.
+
+- **Biomas:** capa separada sobre el terreno con 4 biomas generados a escala mayor (40 iteraciones): templado, ártico, desierto y tropical. Cada bioma aplica offsets de temperatura (`±0.5`) y multiplicadores de regeneración de pasto (`×0.3` a `×1.8`), creando nichos ecológicos visibles: las poblaciones prosperan en zonas tropicales y colapsan en el ártico o desierto sin adaptación genómica.
+
+- **Ciclos de estaciones / temperatura:** temperatura global = `sin(2π·tick / 400) × 0.85`, con offset adicional por bioma. Efectos: (1) velocidad de movimiento reducida hasta 80% en extremos (`TEMP_SPEED_FACTOR = 0.4`); (2) umbral de reproducción aumentado hasta +25 energía en invierno ártico; (3) tasa de regeneración de pasto cae hasta 5% del valor base. El sidebar muestra estación actual (Primavera/Verano/Otoño/Invierno) y valor numérico de temperatura.
+
+- **Difusión de nutrientes:** grilla `nutrient[y,x] = float32` que se actualiza cada tick con la ecuación de difusión estable (`D=0.05`, decaimiento `0.92`). El pasto deposita nutriente en su celda; éste se difunde hacia las adyacentes creando gradientes suaves. Los herbívoros lo usan como señal de quimiotaxis de largo alcance (`weight=0.12`), lo que produce flujos organizados hacia zonas ricas antes de tener línea de visión directa. El nutriente también potencia levemente la regeneración del pasto en áreas ricas.
+
+- **Perturbaciones periódicas:** fuego cada 500 ticks (círculo de radio 12, limpia organismos + pasto + marca naranja que decae) e inundación cada 750 ticks (franja horizontal de 20 celdas, marca azul). Ambas dejan rastro visual decayente en canvas; la comunidad recoloniza desde los bordes de la zona afectada, visible como sucesión ecológica.
+
+- **Renderizado de Fase 5:** orden de prioridad (menor a mayor): terreno → territorio → feromona → pasto → organismos → inundación → fuego. La roca siempre muestra su color (los organismos nunca la ocupan). Las perturbaciones activas tienen máxima prioridad visual en celdas vacías.
+
+- **Estructura de datos nueva:** `terrain[y,x]`, `biome[y,x]`, `nutrient[y,x]`, `fire[y,x]`, `flood[y,x]` (todas float32/uint8 paralelas). `tick_count` movido al estado de simulación; `global_temperature` y `local_temperature[y,x]` calculados cada tick por `rules/temperature.py`.
+
+
 ## v2.0.0 — 2026-06-14
 
 - **Feromonas y quimiotaxis:** cada organismo deposita una traza química en la celda que ocupa. Las feromonas se difunden a las celdas vecinas mediante un stencil de 5 puntos y decaen exponencialmente (~15% por tick). Los herbívoros siguen el rastro propio de su especie (`PHEROMONE_HERB_ATTRACTION = 0.5`), lo que genera autopistas emergentes y migración en grupo. Los depredadores rastrean la feromona combinada de ambas especies presa (`PHEROMONE_PRED_ATTRACTION = 0.7`), permitiendo caza en zonas recientemente visitadas aunque no haya presa en línea de visión. Implementación: grilla `pheromone[y, x, 3] = float32` con capa por especie.
