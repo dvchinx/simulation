@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.1.0 — 2026-06-19
+
+- **Sprites 16×16:** cada entidad del grid se representa ahora con un sprite SVG sin fondo — círculo verde con antenas (herbívoro A), rectángulo azul con orejas (herbívoro B), rombo rojo con ojos amarillos (depredador), versiones enfermas con manchas para infectados, y sprites de terreno/perturbaciones (pasto, agua, roca, pantano, fuego, inundación). Los sprites se pre-rasterizan como `ImageBitmap` una sola vez al cargar.
+
+- **Fondos de bioma por celda:** el fondo visible bajo cada organismo corresponde al bioma de esa celda (verde para templado, azul para ártico, arenoso para desierto, verde brillante para tropical). El terreno (agua/roca/pantano) usa su propio color de fondo. Feromonas y territorio se renderizan como overlays semitransparentes sobre el fondo de bioma.
+
+- **Viewport rendering:** el canvas pasa de 3200×3200 (~40 MB de textura GPU) a ~600×600 (~1.4 MB). Pan y zoom ya no usan CSS transform — el canvas dibuja solo los tiles visibles en cada frame vía `requestAnimationFrame`. A zoom=10 se procesan ~400 tiles en vez de 40.000; el gesto de zoom/pan es inmediato en cualquier dispositivo.
+
+- **Fondo estático pre-renderizado (`OffscreenCanvas`):** los colores de bioma+terreno se calculan una sola vez al conectar y se guardan en un `OffscreenCanvas` de 200×200. Cada redraw hace un blit parcial de esa región visible — 1 llamada en vez de miles de `fillRect`.
+
+- **Gestión de ventana:** el canvas se ajusta automáticamente al redimensionar la ventana (`ResizeObserver`-like via `resize`). Al hacer zoom, el mapa se mantiene centrado en el puntero.
+
 ## v3.0.0 — 2026-06-16
 
 - **Terreno variable:** el grid se genera con ruido aleatorio suavizado (25 iteraciones de promedio de vecinos) que produce zonas orgánicas de agua (azul), roca (gris) y pantano (verde oscuro). La roca es infranqueable para cualquier especie; agua y pantano elevan el costo metabólico de moverse (×1.6 y ×1.3 respectivamente). Las crías no pueden nacer en roca. El pasto no regenera en roca.

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- cuerpo: amarillo enfermizo -->
+  <circle cx="8" cy="9" r="5.5" fill="#c8c800"/>
+  <!-- manchas de infección -->
+  <circle cx="9.5" cy="11" r="1.1" fill="#888800" opacity="0.85"/>
+  <circle cx="6" cy="11.5" r="0.75" fill="#888800" opacity="0.85"/>
+  <circle cx="11" cy="8.5" r="0.7" fill="#888800" opacity="0.85"/>
+  <!-- ojos enfermos -->
+  <circle cx="6" cy="8" r="1.4" fill="#eeee80"/>
+  <circle cx="10" cy="8" r="1.4" fill="#eeee80"/>
+  <circle cx="6.3" cy="8.4" r="0.65" fill="#444"/>
+  <circle cx="10.3" cy="8.4" r="0.65" fill="#444"/>
+  <!-- antenas caídas -->
+  <line x1="6" y1="3.8" x2="3.5" y2="3" stroke="#888800" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="10" y1="3.8" x2="12.5" y2="3" stroke="#888800" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

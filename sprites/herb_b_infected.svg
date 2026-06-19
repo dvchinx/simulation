@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- cuerpo: naranja enfermizo -->
+  <rect x="2.5" y="5" width="11" height="9.5" rx="2.5" fill="#c87800"/>
+  <!-- orejas caídas / deformes -->
+  <rect x="4.5" y="2.5" width="2.2" height="3.5" rx="1.1" fill="#c87800" transform="rotate(12 5.6 4)"/>
+  <rect x="9.3" y="2.5" width="2.2" height="3.5" rx="1.1" fill="#c87800" transform="rotate(-12 10.4 4)"/>
+  <!-- manchas de infección -->
+  <circle cx="9.5" cy="12" r="1.1" fill="#884400" opacity="0.85"/>
+  <circle cx="5.5" cy="12" r="0.75" fill="#884400" opacity="0.85"/>
+  <circle cx="11.5" cy="8.5" r="0.7" fill="#884400" opacity="0.85"/>
+  <!-- ojos enfermos -->
+  <circle cx="6" cy="8.5" r="1.4" fill="#ffcc88"/>
+  <circle cx="10" cy="8.5" r="1.4" fill="#ffcc88"/>
+  <circle cx="6.3" cy="8.8" r="0.65" fill="#444"/>
+  <circle cx="10.3" cy="8.8" r="0.65" fill="#444"/>
+</svg>

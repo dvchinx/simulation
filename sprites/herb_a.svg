@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- cuerpo circular -->
+  <circle cx="8" cy="9" r="5.5" fill="#00c864"/>
+  <!-- ojos -->
+  <circle cx="6" cy="8" r="1.4" fill="white"/>
+  <circle cx="10" cy="8" r="1.4" fill="white"/>
+  <circle cx="6.4" cy="8.3" r="0.65" fill="#111"/>
+  <circle cx="10.4" cy="8.3" r="0.65" fill="#111"/>
+  <!-- antenas -->
+  <line x1="6" y1="3.8" x2="4.2" y2="1.8" stroke="#009948" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="10" y1="3.8" x2="11.8" y2="1.8" stroke="#009948" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="4.2" cy="1.8" r="0.85" fill="#00c864"/>
+  <circle cx="11.8" cy="1.8" r="0.85" fill="#00c864"/>
+</svg>

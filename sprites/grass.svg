@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- tierra -->
+  <rect x="1" y="13" width="14" height="2.5" rx="1" fill="#3a2010" opacity="0.5"/>
+  <!-- briznas de pasto -->
+  <path d="M4 13 C3.5 10 4.5 7 4 4" stroke="#1a7020" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <path d="M4 4 C3 3 2 2.5 1.5 1.5" stroke="#1a7020" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <path d="M8 13 C7.5 9 8.5 6 8 2" stroke="#28a030" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  <path d="M8 2 C7 1.5 6.5 0.5 6 0" stroke="#28a030" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <path d="M12 13 C11.5 10 12.5 7 12 4" stroke="#1a7020" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <path d="M12 4 C13 3 14 2.5 14.5 1.5" stroke="#1a7020" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+</svg>
