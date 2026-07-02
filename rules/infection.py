@@ -7,11 +7,11 @@ def apply(state):
     energy = state["energy"].copy()
     infected = state["infected"].copy()
 
-    is_herbivore = (species == 1) | (species == 3)
+    susceptible = (species == 1) | (species == 3) | (species == 4)
     is_infected = infected > 0
 
-    # drenar energía de los herbívoros infectados
-    draining = is_herbivore & is_infected
+    # drenar energía de los organismos infectados
+    draining = susceptible & is_infected
     energy[draining] = np.maximum(
         energy[draining].astype(np.int16) - INFECTION_ENERGY_DRAIN, 0
     ).astype(np.uint8)
@@ -23,12 +23,12 @@ def apply(state):
         np.roll(i_mask,  1, axis=1) + np.roll(i_mask, -1, axis=1)
     )
 
-    # propagar a herbívoros sanos adyacentes a al menos un infectado
-    can_catch = is_herbivore & ~is_infected & (neighbor_count > 0)
+    # propagar a organismos susceptibles sanos adyacentes a al menos un infectado
+    can_catch = susceptible & ~is_infected & (neighbor_count > 0)
     infected[can_catch & (np.random.random(infected.shape) < INFECTION_SPREAD_PROB)] = 1
 
     # recuperación espontánea
-    recovering = is_infected & is_herbivore & (np.random.random(infected.shape) < INFECTION_CLEAR_PROB)
+    recovering = is_infected & susceptible & (np.random.random(infected.shape) < INFECTION_CLEAR_PROB)
     infected[recovering] = 0
 
     # limpiar infección en celdas sin organismo

@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.2.0 — 2026-06-22
+
+- **Reproducción sexual con crossover genómico:** los herbívoros A, B y omnívoros requieren encontrarse con un congénere del género opuesto (macho/hembra) en una celda adyacente, y ambos deben superar su umbral de energía. El genoma del hijo surge de un crossover uniforme — cada gen se hereda aleatoriamente de uno u otro padre — seguido de mutación con la tasa promedio de ambos padres. El depredador mantiene reproducción asexual. Cada organismo lleva un género asignado aleatoriamente al nacer; el género viaja con el organismo al moverse.
+
+- **Omnívoro (especie 4, morado):** nueva especie con dieta mixta — come pasto (60% de eficiencia respecto a los herbívoros) y caza herbívoros (30 de energía por presa, vs. 60 del depredador puro). Tiene visión propia y prioriza presas sobre pasto. Participa en la reproducción sexual. Puede contagiarse y transmitir la infección. Sprite hexagonal morado con un ojo verde y uno rojo. Población inicial: 50 organismos.
+
+- **Inspector de celda:** al hacer clic sobre cualquier celda del canvas se envía una solicitud al servidor vía WebSocket. La respuesta muestra en una ventana flotante: especie, género, barras de energía y edad, estado de infección y los 5 valores del genoma individual. La ventana se cierra con el botón × o se sobreescribe con el siguiente clic.
+
+- **Gráfica de población:** panel en el sidebar que muestra las últimas 200 estadísticas recibidas como curvas temporales para cada especie (Herb A, Depredador, Herb B, Omnívoro). El eje Y se escala automáticamente al máximo histórico. Dibujada con Canvas 2D sin librerías externas.
+
+- **Tabla de evolución ampliada:** la columna de genes medios ahora incluye los omnívoros (Omni) junto a Herb A, Pred y Herb B.
+
 ## v3.1.0 — 2026-06-19
 
 - **Sprites 16×16:** cada entidad del grid se representa ahora con un sprite SVG sin fondo — círculo verde con antenas (herbívoro A), rectángulo azul con orejas (herbívoro B), rombo rojo con ojos amarillos (depredador), versiones enfermas con manchas para infectados, y sprites de terreno/perturbaciones (pasto, agua, roca, pantano, fuego, inundación). Los sprites se pre-rasterizan como `ImageBitmap` una sola vez al cargar.

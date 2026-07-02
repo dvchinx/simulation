@@ -36,11 +36,12 @@
       border-left: 1px solid #2a2a2a;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow-y: auto;
     }
     .sidebar-section {
       padding: 16px;
       border-bottom: 1px solid #2a2a2a;
+      flex-shrink: 0;
     }
     h2 {
       font-size: 11px;
@@ -76,8 +77,7 @@
       transition: width 0.9s ease;
     }
     #changelog-section {
-      flex: 1;
-      overflow-y: auto;
+      flex-shrink: 0;
       padding: 16px;
     }
     .evo-table {
@@ -125,6 +125,58 @@
     }
     #heatmap-btn:hover { background: #2a2a2a; color: #bbb; border-color: #444; }
     #heatmap-btn.active { background: #122018; border-color: #2a6a3a; color: #00c864; }
+
+    /* Inspector de celda */
+    #inspector {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 12px 14px;
+      min-width: 210px;
+      z-index: 200;
+      font-size: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+    }
+    #inspector.hidden { display: none; }
+    .insp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .insp-title { color: #eee; font-size: 13px; font-weight: bold; }
+    .insp-close {
+      background: none; border: none; color: #777; cursor: pointer;
+      font-size: 16px; line-height: 1; padding: 0 2px;
+    }
+    .insp-close:hover { color: #ccc; }
+    .insp-row {
+      display: flex; justify-content: space-between;
+      margin-bottom: 5px; gap: 8px;
+    }
+    .insp-label { color: #666; }
+    .insp-val   { color: #ccc; text-align: right; }
+    .insp-bar-bg {
+      background: #2a2a2a; border-radius: 2px;
+      height: 4px; overflow: hidden; margin: 2px 0 6px;
+    }
+    .insp-bar { height: 4px; border-radius: 2px; }
+    .insp-gene { color: #888; font-size: 11px; }
+
+    /* Gráfica de población */
+    #pop-chart { display: block; width: 100%; }
+    .chart-legend {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      font-size: 10px; color: #777; margin-top: 4px;
+    }
+    .chart-legend span { display: flex; align-items: center; gap: 3px; }
+    .chart-legend i {
+      display: inline-block; width: 10px; height: 3px; border-radius: 1px;
+    }
 
     /* Mobile: layout vertical */
     @media (max-width: 640px) {
@@ -218,6 +270,16 @@
       <div class="meters-row" style="margin-top:8px">
         <div class="meter">
           <div class="meter-header">
+            <span class="meter-name">Omnívoro</span>
+            <span class="meter-count" id="omni-count">0</span>
+          </div>
+          <div class="meter-bar-bg">
+            <div class="meter-bar" id="omni-bar" style="background:#a03cc8"></div>
+          </div>
+        </div>
+
+        <div class="meter">
+          <div class="meter-header">
             <span class="meter-name">Infectados</span>
             <span class="meter-count" id="infected-count">0</span>
           </div>
@@ -266,22 +328,43 @@
             <th style="color:#00c864">HerbA</th>
             <th style="color:#dc3c3c">Pred</th>
             <th style="color:#3c8cdc">HerbB</th>
+            <th style="color:#a03cc8">Omni</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td>Velocidad</td> <td id="ea-0">—</td><td id="ep-0">—</td><td id="eb-0">—</td></tr>
-          <tr><td>Reprod.</td>   <td id="ea-1">—</td><td id="ep-1">—</td><td id="eb-1">—</td></tr>
-          <tr><td>Eficienc.</td> <td id="ea-2">—</td><td id="ep-2">—</td><td id="eb-2">—</td></tr>
-          <tr><td>Visión</td>    <td id="ea-3">—</td><td id="ep-3">—</td><td id="eb-3">—</td></tr>
-          <tr><td>Mutación</td>  <td id="ea-4">—</td><td id="ep-4">—</td><td id="eb-4">—</td></tr>
+          <tr><td>Velocidad</td> <td id="ea-0">—</td><td id="ep-0">—</td><td id="eb-0">—</td><td id="eo-0">—</td></tr>
+          <tr><td>Reprod.</td>   <td id="ea-1">—</td><td id="ep-1">—</td><td id="eb-1">—</td><td id="eo-1">—</td></tr>
+          <tr><td>Eficienc.</td> <td id="ea-2">—</td><td id="ep-2">—</td><td id="eb-2">—</td><td id="eo-2">—</td></tr>
+          <tr><td>Visión</td>    <td id="ea-3">—</td><td id="ep-3">—</td><td id="eb-3">—</td><td id="eo-3">—</td></tr>
+          <tr><td>Mutación</td>  <td id="ea-4">—</td><td id="ep-4">—</td><td id="eb-4">—</td><td id="eo-4">—</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>Población</h2>
+      <canvas id="pop-chart" height="72"></canvas>
+      <div class="chart-legend">
+        <span><i style="background:#00c864"></i>Herb A</span>
+        <span><i style="background:#dc3c3c"></i>Depred.</span>
+        <span><i style="background:#3c8cdc"></i>Herb B</span>
+        <span><i style="background:#a03cc8"></i>Omni</span>
+      </div>
     </div>
 
     <div id="changelog-section">
       <h2>Changelog</h2>
       <div id="changelog">Cargando...</div>
     </div>
+  </div>
+
+  <!-- Inspector de celda -->
+  <div id="inspector" class="hidden">
+    <div class="insp-header">
+      <span class="insp-title" id="insp-title">Celda</span>
+      <button class="insp-close" id="insp-close">×</button>
+    </div>
+    <div id="insp-body"></div>
   </div>
 
   <div id="status">Conectando...</div>

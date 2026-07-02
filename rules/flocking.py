@@ -47,7 +47,11 @@ def _scores_for_species(density):
 def apply(state):
     species = state["species"]
 
-    flock_a = _scores_for_species((species == 1).astype(np.float32))
-    flock_b = _scores_for_species((species == 3).astype(np.float32))
+    flock_a    = _scores_for_species((species == 1).astype(np.float32))
+    flock_b    = _scores_for_species((species == 3).astype(np.float32))
+    flock_pred = _scores_for_species((species == 2).astype(np.float32))
+    flock_omni = _scores_for_species((species == 4).astype(np.float32))
 
-    return {**state, "flock_a": flock_a, "flock_b": flock_b}
+    return {**state,
+            "flock_a": flock_a, "flock_b": flock_b,
+            "flock_pred": flock_pred, "flock_omni": flock_omni}

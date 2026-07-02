@@ -4,7 +4,7 @@ const statusEl = document.getElementById('status');
 const heatmapBtn = document.getElementById('heatmap-btn');
 
 const TOTAL_CELLS = 200 * 200;
-const TILE_SIZE = 16;  // resolución de sprites (ImageBitmap)
+const TILE_SIZE = 16;
 
 const WS_URL = window.location.protocol === 'https:'
   ? `wss://${window.location.hostname}/ws`
@@ -14,13 +14,13 @@ let width = 200;
 let height = 200;
 let colorMap = {};
 let biomeFrame = null;
-let renderMode = 'live';  // 'live' | 'biome'
+let renderMode = 'live';
 
 const BIOME_BG = {
-  60: [80,  160, 100],  // templado
-  61: [60,  80,  180],  // ártico
-  62: [180, 130, 40 ],  // desierto
-  63: [30,  180, 80 ],  // tropical
+  60: [80,  160, 100],
+  61: [60,  80,  180],
+  62: [180, 130, 40 ],
+  63: [30,  180, 80 ],
 };
 const DEFAULT_BG = [20, 20, 20];
 
@@ -28,8 +28,10 @@ const SPRITE_IDS = {
   1:  'herb_a',
   2:  'predator',
   3:  'herb_b',
+  4:  'omnivore',
   5:  'herb_a_infected',
   6:  'herb_b_infected',
+  7:  'omnivore_infected',
   10: 'grass',
   30: 'water',
   31: 'rock',
@@ -39,11 +41,11 @@ const SPRITE_IDS = {
 };
 
 const sprites = {};
-let bgCanvas = null;    // OffscreenCanvas 200×200 con colores de bioma (1px por tile)
+let bgCanvas = null;
 let currentBytes = null;
 let rafId = null;
 
-// ---- Fondo estático: 200×200 ImageData, 1px por tile ----
+// ---- Fondo estático ----
 
 function buildBackground() {
   if (!biomeFrame) return;
@@ -62,7 +64,7 @@ function buildBackground() {
   bgCtx.putImageData(img, 0, 0);
 }
 
-// ---- Sprites: SVG → ImageBitmap pre-rasterizado ----
+// ---- Sprites ----
 
 async function loadSprites() {
   await Promise.all(Object.entries(SPRITE_IDS).map(([val, name]) =>
@@ -87,7 +89,6 @@ let panY = 0;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 10;
 
-// Tamaño de un tile en píxeles de canvas al zoom actual
 function ts() { return (canvas.width / width) * zoom; }
 
 function clampPan() {
@@ -136,13 +137,11 @@ function redraw() {
   const t = ts();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Calcular región visible en coordenadas de tile
   const c0 = Math.max(0, Math.floor(-panX / t));
   const r0 = Math.max(0, Math.floor(-panY / t));
   const c1 = Math.min(width,  Math.ceil((canvas.width  - panX) / t));
   const r1 = Math.min(height, Math.ceil((canvas.height - panY) / t));
 
-  // Fondo: blit parcial del bgCanvas (1px por tile → escalado a viewport)
   if (bgCanvas) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bgCanvas,
@@ -153,7 +152,6 @@ function redraw() {
     ctx.fillRect(panX, panY, width * t, height * t);
   }
 
-  // Sprites: solo cuando los tiles son suficientemente grandes para verlos
   if (renderMode === 'live' && currentBytes && t >= 3) {
     for (let r = r0; r < r1; r++) {
       for (let c = c0; c < c1; c++) {
@@ -172,6 +170,39 @@ heatmapBtn.addEventListener('click', () => {
   heatmapBtn.textContent = renderMode === 'biome' ? 'Ver simulación' : 'Ver biomas';
   scheduleRedraw();
 });
+
+// ---- Gráfica de población ----
+
+const popChart = document.getElementById('pop-chart');
+const popCtx = popChart.getContext('2d');
+const MAX_HISTORY = 200;
+const popHistory = [];
+const CHART_COLORS = ['#00c864', '#dc3c3c', '#3c8cdc', '#a03cc8'];
+
+function drawPopChart() {
+  const W = popChart.width;
+  const H = popChart.height;
+  popCtx.clearRect(0, 0, W, H);
+  if (popHistory.length < 2) return;
+
+  const keys = ['herb_a', 'predators', 'herb_b', 'omni'];
+  const maxVal = popHistory.reduce((m, d) => Math.max(m, ...keys.map(k => d[k] || 0)), 1);
+
+  popCtx.fillStyle = '#111';
+  popCtx.fillRect(0, 0, W, H);
+
+  keys.forEach((key, ki) => {
+    popCtx.beginPath();
+    popCtx.strokeStyle = CHART_COLORS[ki];
+    popCtx.lineWidth = 1.5;
+    popHistory.forEach((d, i) => {
+      const x = (i / (MAX_HISTORY - 1)) * W;
+      const y = H - (d[key] || 0) / maxVal * (H - 2) - 1;
+      i === 0 ? popCtx.moveTo(x, y) : popCtx.lineTo(x, y);
+    });
+    popCtx.stroke();
+  });
+}
 
 // ---- Stats ----
 
@@ -198,16 +229,19 @@ function updateStats(msg) {
   document.getElementById('herb-a-count').textContent = msg.herb_a;
   document.getElementById('pred-count').textContent = msg.predators;
   document.getElementById('herb-b-count').textContent = msg.herb_b;
+  document.getElementById('omni-count').textContent = msg.omni || 0;
   document.getElementById('infected-count').textContent = msg.infected;
   document.getElementById('food-count').textContent = msg.food;
   document.getElementById('herb-a-bar').style.width = pct(msg.herb_a);
   document.getElementById('pred-bar').style.width = pct(msg.predators);
   document.getElementById('herb-b-bar').style.width = pct(msg.herb_b);
+  document.getElementById('omni-bar').style.width = pct(msg.omni || 0);
   document.getElementById('infected-bar').style.width = pct(msg.infected);
   document.getElementById('food-bar').style.width = pct(msg.food);
   updateGenes('a', msg.genome_a);
   updateGenes('p', msg.genome_p);
   updateGenes('b', msg.genome_b);
+  updateGenes('o', msg.genome_o);
   if (msg.territory_a !== undefined) {
     document.getElementById('ter-a').textContent = msg.territory_a;
     document.getElementById('ter-p').textContent = msg.territory_p;
@@ -218,12 +252,71 @@ function updateStats(msg) {
     const t = msg.temperature;
     document.getElementById('temp-display').textContent = (t >= 0 ? '+' : '') + t.toFixed(2);
   }
+
+  // historial para la gráfica
+  popHistory.push({
+    herb_a: msg.herb_a,
+    predators: msg.predators,
+    herb_b: msg.herb_b,
+    omni: msg.omni || 0,
+  });
+  if (popHistory.length > MAX_HISTORY) popHistory.shift();
+  // sincronizar ancho del canvas con su CSS width
+  const cw = popChart.offsetWidth;
+  if (cw > 0 && popChart.width !== cw) popChart.width = cw;
+  drawPopChart();
+}
+
+// ---- Inspector de celda ----
+
+const inspector = document.getElementById('inspector');
+const inspTitle = document.getElementById('insp-title');
+const inspBody  = document.getElementById('insp-body');
+document.getElementById('insp-close').addEventListener('click', () => {
+  inspector.classList.add('hidden');
+});
+
+const GENE_NAMES = ['Velocidad', 'Reprod.', 'Eficienc.', 'Visión', 'Mutación'];
+const SP_COLORS  = { 1: '#00c864', 2: '#dc3c3c', 3: '#3c8cdc', 4: '#a03cc8' };
+
+function showCellInfo(msg) {
+  const color = SP_COLORS[msg.species] || '#888';
+  inspTitle.textContent = `[${msg.row},${msg.col}] ${msg.name}`;
+  inspTitle.style.color = color;
+
+  let html = '';
+  if (msg.species === 0) {
+    html = '<div style="color:#555;text-align:center;padding:8px 0">Celda vacía</div>';
+  } else {
+    const maxE = msg.species === 2 ? 120 : msg.species === 4 ? 110 : 100;
+    const ePct = Math.min(100, Math.round(msg.energy / maxE * 100));
+    const maxA = msg.species === 2 ? 120 : msg.species === 4 ? 130 : 150;
+    const aPct = Math.min(100, Math.round(msg.age / maxA * 100));
+
+    html += `<div class="insp-row"><span class="insp-label">Género</span><span class="insp-val">${msg.gender || '—'}</span></div>`;
+    html += `<div class="insp-row"><span class="insp-label">Energía</span><span class="insp-val">${msg.energy}</span></div>`;
+    html += `<div class="insp-bar-bg"><div class="insp-bar" style="background:${color};width:${ePct}%"></div></div>`;
+    html += `<div class="insp-row"><span class="insp-label">Edad</span><span class="insp-val">${msg.age}</span></div>`;
+    html += `<div class="insp-bar-bg"><div class="insp-bar" style="background:#555;width:${aPct}%"></div></div>`;
+    html += `<div class="insp-row"><span class="insp-label">Infectado</span><span class="insp-val" style="color:${msg.infected?'#c8c800':'#444'}">${msg.infected ? 'Sí' : 'No'}</span></div>`;
+
+    if (msg.genome) {
+      html += '<div style="margin-top:8px;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Genes</div>';
+      msg.genome.forEach((v, i) => {
+        html += `<div class="insp-row"><span class="insp-label insp-gene">${GENE_NAMES[i]}</span><span class="insp-val insp-gene">${GENE_FMT[i](v)}</span></div>`;
+      });
+    }
+  }
+  inspBody.innerHTML = html;
+  inspector.classList.remove('hidden');
 }
 
 // ---- WebSocket ----
 
+let ws = null;
+
 function connect() {
-  const ws = new WebSocket(WS_URL);
+  ws = new WebSocket(WS_URL);
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => { statusEl.textContent = 'Conectado'; };
@@ -234,7 +327,6 @@ function connect() {
       if (msg.type === 'init') {
         width  = msg.width;
         height = msg.height;
-        // Canvas = tamaño CSS real (viewport), no el mundo entero
         canvas.width  = canvas.offsetWidth  || 600;
         canvas.height = canvas.offsetHeight || 600;
         ctx.imageSmoothingEnabled = false;
@@ -250,6 +342,8 @@ function connect() {
         }
       } else if (msg.type === 'stats') {
         updateStats(msg);
+      } else if (msg.type === 'cell') {
+        showCellInfo(msg);
       }
     } else {
       currentBytes = new Uint8Array(event.data);
@@ -273,7 +367,7 @@ fetch('CHANGELOG.md')
 loadSprites();
 connect();
 
-// ---- Zoom / Pan (sin CSS transform — todo via redraw) ----
+// ---- Zoom / Pan ----
 
 const view = document.getElementById('view');
 
@@ -306,9 +400,11 @@ view.addEventListener('wheel', (e) => {
 view.addEventListener('dblclick', resetZoom);
 
 let dragging = false;
+let didDrag  = false;
 let dragX = 0, dragY = 0;
 
 view.addEventListener('mousedown', (e) => {
+  didDrag = false;
   if (zoom <= 1 || e.button !== 0) return;
   dragging = true; dragX = e.clientX; dragY = e.clientY;
   view.style.cursor = 'grabbing';
@@ -316,6 +412,7 @@ view.addEventListener('mousedown', (e) => {
 });
 window.addEventListener('mousemove', (e) => {
   if (!dragging) return;
+  didDrag = true;
   panX += e.clientX - dragX;
   panY += e.clientY - dragY;
   dragX = e.clientX; dragY = e.clientY;
@@ -326,6 +423,20 @@ window.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
   view.style.cursor = zoom > 1 ? 'grab' : 'default';
+});
+
+// Inspector: click en el canvas → enviar solicitud al servidor
+canvas.addEventListener('click', (e) => {
+  if (didDrag) return;
+  const rect = canvas.getBoundingClientRect();
+  const t    = ts();
+  const col  = Math.floor((e.clientX - rect.left - panX) / t);
+  const row  = Math.floor((e.clientY - rect.top  - panY) / t);
+  if (col >= 0 && col < width && row >= 0 && row < height) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'inspect', row, col }));
+    }
+  }
 });
 
 // Touch: pinch zoom + drag
@@ -386,7 +497,6 @@ view.addEventListener('touchend', (e) => {
   lastTapTime = now;
 }, { passive: false });
 
-// Ajustar canvas si la ventana cambia de tamaño
 window.addEventListener('resize', () => {
   canvas.width  = canvas.offsetWidth  || 600;
   canvas.height = canvas.offsetHeight || 600;

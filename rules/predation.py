@@ -2,8 +2,8 @@ import numpy as np
 from config import (
     GRID_WIDTH, GRID_HEIGHT,
     PREDATOR_MOVE_COST, PREDATOR_MAX_ENERGY, PREDATOR_ENERGY_FROM_PREY,
-    GENE_VISION, GENE_FOOD_EFFICIENCY,
-    PHEROMONE_PRED_ATTRACTION,
+    GENE_VISION, GENE_FOOD_EFFICIENCY, GENE_REPRO_ENERGY,
+    PHEROMONE_PRED_ATTRACTION, PREDATOR_MATE_SEEK_MULT,
     TERRAIN_WATER_COST, TERRAIN_SWAMP_COST,
 )
 
@@ -24,7 +24,7 @@ def apply(state):
         return state
 
     n    = len(predators)
-    prey = (species == 1) | (species == 3)
+    prey = (species == 1) | (species == 3) | (species == 4)
 
     pred_vision = np.round(genome[predators[:, 0], predators[:, 1], GENE_VISION]).astype(np.int32)
     dir_scores  = np.zeros((n, 4), dtype=np.float32)
@@ -48,6 +48,16 @@ def apply(state):
             nx = np.clip(predators[:, 1] + dx, 0, GRID_WIDTH - 1)
             dir_scores[:, d_idx] += PHEROMONE_PRED_ATTRACTION * prey_ph[ny, nx]
 
+    # --- Cohesión de cardumen: atracción hacia otros depredadores (favorece encontrar pareja).
+    # Una vez fértil, buscar pareja pesa mucho más que seguir cazando. ---
+    if "flock_pred" in state:
+        fp = state["flock_pred"]
+        repro_thresh = genome[predators[:, 0], predators[:, 1], GENE_REPRO_ENERGY]
+        fertile = energy[predators[:, 0], predators[:, 1]].astype(np.float32) >= repro_thresh
+        mate_weight = np.where(fertile, PREDATOR_MATE_SEEK_MULT, 1.0)
+        for d_idx in range(4):
+            dir_scores[:, d_idx] += mate_weight * fp[predators[:, 0], predators[:, 1], d_idx]
+
     dir_scores += np.random.uniform(0, 1e-4, dir_scores.shape)
     no_prey    = np.all(dir_scores <= 1e-4, axis=1)
     best_dir   = np.argmax(dir_scores, axis=1)
@@ -59,7 +69,7 @@ def apply(state):
     targets[:, 1] = np.clip(targets[:, 1], 0, GRID_WIDTH - 1)
 
     target_sp       = species[targets[:, 0], targets[:, 1]]
-    is_prey_target  = (target_sp == 1) | (target_sp == 3)
+    is_prey_target  = (target_sp == 1) | (target_sp == 3) | (target_sp == 4)
     is_empty_target = target_sp == 0
     # --- Fase 5: roca infranqueable para depredadores también ---
     if terrain is not None:
@@ -73,10 +83,12 @@ def apply(state):
     eating = is_prey_target  & no_conflict
     moving = is_empty_target & no_conflict
 
+    gender = state.get("gender")
     new_species  = species.copy()
     new_energy   = energy.copy()
     new_infected = state["infected"].copy()
     new_genome   = genome.copy()
+    new_gender   = gender.copy() if gender is not None else None
 
     if np.any(eating):
         efficiency    = genome[predators[eating, 0], predators[eating, 1], GENE_FOOD_EFFICIENCY]
@@ -93,6 +105,9 @@ def apply(state):
         new_infected[targets [eating, 0], targets [eating, 1]]   = 0
         new_genome  [targets [eating, 0], targets [eating, 1]]   = genome[predators[eating, 0], predators[eating, 1]]
         new_genome  [predators[eating, 0], predators[eating, 1]] = 0
+        if new_gender is not None:
+            new_gender[targets [eating, 0], targets [eating, 1]] = gender[predators[eating, 0], predators[eating, 1]]
+            new_gender[predators[eating, 0], predators[eating, 1]] = 0
 
     if np.any(moving):
         new_species [predators[moving, 0], predators[moving, 1]] = 0
@@ -101,6 +116,9 @@ def apply(state):
         new_energy  [predators[moving, 0], predators[moving, 1]] = 0
         new_genome  [targets [moving, 0], targets [moving, 1]]   = genome[predators[moving, 0], predators[moving, 1]]
         new_genome  [predators[moving, 0], predators[moving, 1]] = 0
+        if new_gender is not None:
+            new_gender[targets [moving, 0], targets [moving, 1]] = gender[predators[moving, 0], predators[moving, 1]]
+            new_gender[predators[moving, 0], predators[moving, 1]] = 0
 
     # --- Costo metabólico con modificador de terreno ---
     alive_pred = new_species == 2
@@ -121,5 +139,11 @@ def apply(state):
     starved = (new_species == 2) & (new_energy == 0)
     new_species[starved] = 0
     new_genome [starved] = 0
+    if new_gender is not None:
+        new_gender[starved] = 0
 
-    return {**state, "species": new_species, "energy": new_energy, "infected": new_infected, "genome": new_genome}
+    result = {**state, "species": new_species, "energy": new_energy,
+              "infected": new_infected, "genome": new_genome}
+    if new_gender is not None:
+        result["gender"] = new_gender
+    return result

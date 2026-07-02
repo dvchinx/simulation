@@ -34,11 +34,13 @@ def _stats():
         "herb_a":      int(np.sum(sp == 1)),
         "predators":   int(np.sum(sp == 2)),
         "herb_b":      int(np.sum(sp == 3)),
+        "omni":        int(np.sum(sp == 4)),
         "infected":    int(np.sum(sim_state["infected"] > 0)),
         "food":        int(np.sum((sim_state["food"] > 0) & (sp == 0))),
         "genome_a":    _mean_genes(sp == 1),
         "genome_p":    _mean_genes(sp == 2),
         "genome_b":    _mean_genes(sp == 3),
+        "genome_o":    _mean_genes(sp == 4),
         "temperature": round(float(sim_state.get("global_temperature", 0.0)), 3),
         "season":      _season_name(tick_count),
     }
@@ -51,6 +53,21 @@ def _stats():
         stats["territory_p"] = int(np.sum(strong & (ter_which == 1)))
         stats["territory_b"] = int(np.sum(strong & (ter_which == 2)))
     return json.dumps(stats)
+
+
+def _cell_info(r, c):
+    sp  = int(sim_state["species"][r, c])
+    names = {0: "Vacío", 1: "Herbívoro A", 2: "Depredador", 3: "Herbívoro B", 4: "Omnívoro"}
+    info = {"type": "cell", "row": r, "col": c, "species": sp, "name": names.get(sp, "?")}
+    if sp > 0:
+        info["energy"]   = int(sim_state["energy"][r, c])
+        info["age"]      = int(sim_state["age"][r, c])
+        info["infected"] = bool(sim_state["infected"][r, c] > 0)
+        if "gender" in sim_state:
+            info["gender"] = {1: "♂", 2: "♀"}.get(int(sim_state["gender"][r, c]), "—")
+        g = sim_state["genome"][r, c]
+        info["genome"] = [round(float(v), 3) for v in g]
+    return json.dumps(info)
 
 
 async def simulation_loop():
@@ -96,8 +113,16 @@ async def handler(websocket):
         }))
         await websocket.send(_stats())
         await websocket.send(build_render(sim_state).tobytes())
-        async for _ in websocket:
-            pass
+        async for raw in websocket:
+            try:
+                msg = json.loads(raw)
+                if msg.get("type") == "inspect":
+                    r = int(msg["row"])
+                    c = int(msg["col"])
+                    if 0 <= r < GRID_HEIGHT and 0 <= c < GRID_WIDTH:
+                        await websocket.send(_cell_info(r, c))
+            except (json.JSONDecodeError, KeyError, ValueError):
+                pass
     except websockets.ConnectionClosed:
         pass
     finally:

@@ -5,7 +5,7 @@ GRID_HEIGHT = 200
 FPS = 1
 
 # --- Herbívoro A (presa verde) ---
-INITIAL_POPULATION = 300
+INITIAL_POPULATION = 450
 INITIAL_ENERGY = 30
 MOVE_ENERGY_COST = 2
 MAX_ENERGY = 100
@@ -13,11 +13,15 @@ FOOD_ENERGY_GAIN = 20
 MAX_AGE = 150
 
 # --- Herbívoro B (competidor azul) ---
-HERBIVORE_B_POPULATION = 300
+HERBIVORE_B_POPULATION = 450
 HERBIVORE_B_INITIAL_ENERGY = 30
+# Nicho distinto al herbívoro A: mejor eficiencia de pasto en biomas duros (ártico/desierto),
+# peor en templado/tropical — evita exclusión competitiva total entre ambos herbívoros.
+# [templado, ártico, desierto, tropical]
+HERBIVORE_B_BIOME_MULT = np.array([0.6, 1.8, 1.8, 0.6], dtype=np.float32)
 
 # --- Depredador (rojo) ---
-PREDATOR_POPULATION = 25           # menos presión inicial
+PREDATOR_POPULATION = 60           # mayor inicial para soportar reproducción sexual
 PREDATOR_INITIAL_ENERGY = 50
 PREDATOR_MOVE_COST = 2             # igual al herbívoro — sobrevive mejor en escasez
 PREDATOR_MAX_ENERGY = 120
@@ -25,6 +29,16 @@ PREDATOR_REPRODUCE_ENERGY = 115    # requiere 2 cazas seguidas, no 1
 PREDATOR_ENERGY_FROM_PREY = 60
 PREDATOR_MAX_AGE = 120             # más tiempo para sobrevivir períodos de escasez
 PREDATOR_VISION_RANGE = 4          # radio menor → refugio espacial para las presas
+PREDATOR_MATE_SEEK_MULT = 1.0      # sin boost extra: el radio de búsqueda de pareja ya resuelve el emparejamiento
+
+# --- Omnívoro (morado) ---
+OMNI_POPULATION       = 80
+OMNI_INITIAL_ENERGY   = 40
+OMNI_MOVE_COST        = 2
+OMNI_MAX_ENERGY       = 110
+OMNI_ENERGY_FROM_PREY = 30    # menor que el depredador
+OMNI_FOOD_EFFICIENCY  = 0.25  # menor eficiencia de pasto: evita que domine sobre las demás especies
+OMNI_MAX_AGE          = 130
 
 # --- Pasto ---
 INITIAL_FOOD_DENSITY = 0.4
@@ -35,6 +49,9 @@ INFECTION_START_COUNT = 20
 INFECTION_ENERGY_DRAIN = 3         # menos agresiva → huéspedes viven más y contagian más
 INFECTION_SPREAD_PROB = 0.20       # más contagiosa
 INFECTION_CLEAR_PROB = 0.01        # recuperación más lenta → endémica
+
+# --- Reproducción ---
+MATE_SEARCH_RADIUS = 3   # radio (celdas) para detectar pareja, no solo adyacencia directa
 
 # --- Genoma (Fase 3) ---
 N_GENES = 5
@@ -50,6 +67,7 @@ GENOME_MAX = np.array([1.0, 220.0, 3.0, 12.0, 0.400], dtype=np.float32)
 # (speed, repro_energy, food_efficiency, vision, mutation_rate)
 GENOME_HERBIVORE    = np.array([0.9, 100.0, 1.0, 2.0, 0.05], dtype=np.float32)
 GENOME_PREDATOR     = np.array([1.0, 115.0, 1.0, 4.0, 0.05], dtype=np.float32)
+GENOME_OMNIVORE     = np.array([0.8,  90.0, 0.6, 3.0, 0.05], dtype=np.float32)
 GENOME_INIT_NOISE   = np.array([0.08,  12.0, 0.10, 0.5, 0.015], dtype=np.float32)
 
 SPECIES_COLORS = {
@@ -57,8 +75,10 @@ SPECIES_COLORS = {
     1:  [0,   200, 100],  # herbívoro A (verde)
     2:  [220, 60,  60 ],  # depredador (rojo)
     3:  [60,  140, 220],  # herbívoro B (azul)
+    4:  [160, 60,  200],  # omnívoro (morado)
     5:  [200, 200, 0  ],  # herbívoro A infectado (amarillo)
     6:  [200, 120, 0  ],  # herbívoro B infectado (naranja)
+    7:  [120, 40,  160],  # omnívoro infectado (morado oscuro)
     10: [30,  80,  30 ],  # pasto
     # --- Fase 4: feromonas (rastros en celdas vacías) ---
     11: [0,   85,  42 ],  # feromona herbívoro A (verde tenue)

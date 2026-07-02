@@ -4,9 +4,10 @@ from config import (
     INITIAL_POPULATION, INITIAL_ENERGY,
     HERBIVORE_B_POPULATION, HERBIVORE_B_INITIAL_ENERGY,
     PREDATOR_POPULATION, PREDATOR_INITIAL_ENERGY,
+    OMNI_POPULATION, OMNI_INITIAL_ENERGY,
     INITIAL_FOOD_DENSITY, INFECTION_START_COUNT,
     N_GENES, GENOME_MIN, GENOME_MAX,
-    GENOME_HERBIVORE, GENOME_PREDATOR, GENOME_INIT_NOISE,
+    GENOME_HERBIVORE, GENOME_PREDATOR, GENOME_OMNIVORE, GENOME_INIT_NOISE,
     PHEROMONE_RENDER_THRESHOLD, TERRITORY_RENDER_THRESHOLD,
     DISTURBANCE_THRESHOLD,
 )
@@ -17,6 +18,7 @@ from rules import terrain as terrain_rule
 from rules import temperature as temperature_rule
 from rules import diffusion as diffusion_rule
 from rules import disturbances as disturbances_rule
+from rules import omnivore as omnivore_rule
 
 
 def create_state():
@@ -43,12 +45,18 @@ def create_state():
     idx_p = np.random.choice(available, min(PREDATOR_POPULATION, len(available)), replace=False)
     flat[idx_p] = 2
 
+    # omnívoros
+    available = np.where((flat == 0) & (terrain_flat != terrain_rule.TERRAIN_ROCK))[0]
+    idx_o = np.random.choice(available, min(OMNI_POPULATION, len(available)), replace=False)
+    flat[idx_o] = 4
+
     species = flat.reshape((GRID_HEIGHT, GRID_WIDTH))
 
     energy = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
     energy[species == 1] = INITIAL_ENERGY
     energy[species == 2] = PREDATOR_INITIAL_ENERGY
     energy[species == 3] = HERBIVORE_B_INITIAL_ENERGY
+    energy[species == 4] = OMNI_INITIAL_ENERGY
 
     age = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
 
@@ -70,18 +78,25 @@ def create_state():
 
     # genoma con variación inicial
     genome = np.zeros((GRID_HEIGHT, GRID_WIDTH, N_GENES), dtype=np.float32)
-    for sp_id, defaults in [(1, GENOME_HERBIVORE), (2, GENOME_PREDATOR), (3, GENOME_HERBIVORE)]:
+    for sp_id, defaults in [(1, GENOME_HERBIVORE), (2, GENOME_PREDATOR), (3, GENOME_HERBIVORE), (4, GENOME_OMNIVORE)]:
         mask = species == sp_id
         n = int(np.sum(mask))
         if n > 0:
             noise = np.random.randn(n, N_GENES).astype(np.float32) * GENOME_INIT_NOISE
             genome[mask] = np.clip(defaults + noise, GENOME_MIN, GENOME_MAX)
 
+    # género inicial: 1=macho, 2=hembra, asignado aleatoriamente a todos los organismos
+    gender = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
+    alive_mask = species > 0
+    gender[alive_mask] = np.random.randint(1, 3, int(np.sum(alive_mask)), dtype=np.uint8)
+
     # Fase 4
     pheromone = np.zeros((GRID_HEIGHT, GRID_WIDTH, 3), dtype=np.float32)
     territory  = np.zeros((GRID_HEIGHT, GRID_WIDTH, 3), dtype=np.float32)
     flock_a    = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
     flock_b    = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
+    flock_pred = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
+    flock_omni = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
 
     # Fase 5
     nutrient = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32)
@@ -95,10 +110,13 @@ def create_state():
         "food":               food,
         "infected":           infected,
         "genome":             genome,
+        "gender":             gender,
         "pheromone":          pheromone,
         "territory":          territory,
         "flock_a":            flock_a,
         "flock_b":            flock_b,
+        "flock_pred":         flock_pred,
+        "flock_omni":         flock_omni,
         # Fase 5
         "terrain":            terrain_grid,
         "biome":              biome_grid,
@@ -121,6 +139,7 @@ def tick(state):
     state = territory_rule.apply(state)
     state = flocking.apply(state)
     state = predation.apply(state)
+    state = omnivore_rule.apply(state)
     state = infection_rule.apply(state)
     state = random_walk.apply(state)
     state = aging.apply(state)
@@ -136,6 +155,7 @@ def build_render(state):
     # overlay de infectados
     render[(species == 1) & (infected > 0)] = 5
     render[(species == 3) & (infected > 0)] = 6
+    render[(species == 4) & (infected > 0)] = 7
 
     # pasto en celdas sin organismo
     render[(state["food"] > 0) & (species == 0)] = 10

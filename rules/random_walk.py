@@ -22,6 +22,7 @@ def apply(state):
     food     = state["food"]
     terrain  = state.get("terrain")
 
+    gender   = state.get("gender")
     positions = np.argwhere((species == 1) | (species == 3))
     if len(positions) == 0:
         return state
@@ -128,6 +129,7 @@ def apply(state):
     new_energy   = energy.copy()
     new_infected = infected.copy()
     new_genome   = genome.copy()
+    new_gender   = gender.copy() if gender is not None else None
 
     new_species [positions[moving, 0], positions[moving, 1]] = 0
     new_species [targets [moving, 0], targets [moving, 1]]   = species_ids[moving]
@@ -137,6 +139,9 @@ def apply(state):
     new_infected[positions[moving, 0], positions[moving, 1]] = 0
     new_genome  [targets [moving, 0], targets [moving, 1]]   = genome  [positions[moving, 0], positions[moving, 1]]
     new_genome  [positions[moving, 0], positions[moving, 1]] = 0
+    if new_gender is not None:
+        new_gender[targets [moving, 0], targets [moving, 1]] = gender[positions[moving, 0], positions[moving, 1]]
+        new_gender[positions[moving, 0], positions[moving, 1]] = 0
 
     # --- Costo metabólico con modificador de terreno por bioma ---
     alive = (new_species == 1) | (new_species == 3)
@@ -157,6 +162,11 @@ def apply(state):
     new_species [starved] = 0
     new_infected[starved] = 0
     new_genome  [starved] = 0
+    if new_gender is not None:
+        new_gender[starved] = 0
 
-    return {**state, "species": new_species, "energy": new_energy,
-            "infected": new_infected, "genome": new_genome}
+    result = {**state, "species": new_species, "energy": new_energy,
+              "infected": new_infected, "genome": new_genome}
+    if new_gender is not None:
+        result["gender"] = new_gender
+    return result
