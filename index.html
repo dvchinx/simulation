@@ -2,372 +2,141 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Life Simulation</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #111;
-      color: #ccc;
-      display: flex;
-      height: 100vh;
-      font-family: monospace;
-      font-size: 13px;
-    }
-    #view {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 0;
-      overflow: hidden;
-      touch-action: none;
-      user-select: none;
-    }
-    canvas {
-      image-rendering: pixelated;
-      width: min(600px, 100%);
-      aspect-ratio: 1 / 1;
-      height: auto;
-    }
-    #sidebar {
-      width: 260px;
-      background: #1a1a1a;
-      border-left: 1px solid #2a2a2a;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-    }
-    .sidebar-section {
-      padding: 16px;
-      border-bottom: 1px solid #2a2a2a;
-      flex-shrink: 0;
-    }
-    h2 {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #555;
-      margin-bottom: 12px;
-    }
-    #tick-display {
-      font-size: 22px;
-      color: #eee;
-      margin-bottom: 16px;
-    }
-    .meter { margin-bottom: 10px; }
-    .meter-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 4px;
-      font-size: 11px;
-    }
-    .meter-name { color: #aaa; }
-    .meter-count { color: #eee; font-weight: bold; }
-    .meter-bar-bg {
-      background: #2a2a2a;
-      border-radius: 2px;
-      height: 6px;
-      overflow: hidden;
-    }
-    .meter-bar {
-      height: 6px;
-      border-radius: 2px;
-      width: 0%;
-      transition: width 0.9s ease;
-    }
-    #changelog-section {
-      flex-shrink: 0;
-      padding: 16px;
-    }
-    .evo-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 10px;
-      margin-top: 2px;
-    }
-    .evo-table th, .evo-table td {
-      padding: 2px 4px;
-      text-align: right;
-    }
-    .evo-table td:first-child { text-align: left; color: #888; width: 54px; }
-    .evo-table th:first-child { text-align: left; }
-    .evo-table th { color: #555; font-size: 10px; }
-    .evo-table td { color: #bbb; }
-    #changelog {
-      white-space: pre-wrap;
-      line-height: 1.6;
-      color: #666;
-      font-size: 11px;
-    }
-    #status {
-      position: fixed;
-      bottom: 8px;
-      left: 8px;
-      font-size: 10px;
-      color: #444;
-    }
-    #heatmap-btn {
-      display: block;
-      width: 100%;
-      margin-top: 12px;
-      padding: 6px 10px;
-      background: #222;
-      border: 1px solid #333;
-      color: #777;
-      font-family: monospace;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      cursor: pointer;
-      border-radius: 2px;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    #heatmap-btn:hover { background: #2a2a2a; color: #bbb; border-color: #444; }
-    #heatmap-btn.active { background: #122018; border-color: #2a6a3a; color: #00c864; }
-
-    /* Inspector de celda */
-    #inspector {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #1e1e1e;
-      border: 1px solid #333;
-      border-radius: 4px;
-      padding: 12px 14px;
-      min-width: 210px;
-      z-index: 200;
-      font-size: 12px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.6);
-    }
-    #inspector.hidden { display: none; }
-    .insp-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .insp-title { color: #eee; font-size: 13px; font-weight: bold; }
-    .insp-close {
-      background: none; border: none; color: #777; cursor: pointer;
-      font-size: 16px; line-height: 1; padding: 0 2px;
-    }
-    .insp-close:hover { color: #ccc; }
-    .insp-row {
-      display: flex; justify-content: space-between;
-      margin-bottom: 5px; gap: 8px;
-    }
-    .insp-label { color: #666; }
-    .insp-val   { color: #ccc; text-align: right; }
-    .insp-bar-bg {
-      background: #2a2a2a; border-radius: 2px;
-      height: 4px; overflow: hidden; margin: 2px 0 6px;
-    }
-    .insp-bar { height: 4px; border-radius: 2px; }
-    .insp-gene { color: #888; font-size: 11px; }
-
-    /* Gráfica de población */
-    #pop-chart { display: block; width: 100%; }
-    .chart-legend {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      font-size: 10px; color: #777; margin-top: 4px;
-    }
-    .chart-legend span { display: flex; align-items: center; gap: 3px; }
-    .chart-legend i {
-      display: inline-block; width: 10px; height: 3px; border-radius: 1px;
-    }
-
-    /* Mobile: layout vertical */
-    @media (max-width: 640px) {
-      body {
-        flex-direction: column;
-        height: 100dvh;
-      }
-      #view {
-        flex: none;
-        padding: 8px 8px 0;
-      }
-      /* Canvas limitado por alto para dejar espacio al sidebar */
-      canvas {
-        width: auto;
-        height: 42vh;
-        max-width: calc(100vw - 16px);
-      }
-      #sidebar {
-        width: 100%;
-        border-left: none;
-        border-top: 1px solid #2a2a2a;
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-      }
-      .sidebar-section {
-        padding: 8px 12px;
-      }
-      #tick-display {
-        font-size: 16px;
-        margin-bottom: 8px;
-      }
-      /* Stats en fila horizontal */
-      .meters-row {
-        display: flex;
-        gap: 12px;
-      }
-      .meters-row .meter {
-        flex: 1;
-        margin-bottom: 0;
-      }
-      #changelog-section {
-        padding: 10px 12px;
-        flex: none;
-        overflow-y: visible;
-      }
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ecosistema — Simulación de vida artificial</title>
+  <meta name="description" content="Ecosistema evolutivo en tiempo real: herbívoros, depredadores y omnívoros con genoma heredable, estaciones, biomas, feromonas e infecciones. Simulación vectorizada con NumPy transmitida por WebSocket.">
+  <meta name="theme-color" content="#0b0f0d">
+  <meta property="og:title" content="Ecosistema — Simulación de vida artificial">
+  <meta property="og:description" content="Ecosistema evolutivo en tiempo real con selección natural emergente, estaciones, biomas y perturbaciones.">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/svg+xml" href="sprites/herb_a.svg">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="view">
-    <canvas id="canvas" width="200" height="200"></canvas>
-  </div>
-  <div id="sidebar">
-    <div class="sidebar-section">
-      <h2>Simulación</h2>
-      <div id="tick-display">Tick 0</div>
+  <header class="topbar">
+    <div class="brand">
+      <img src="sprites/herb_a.svg" alt="" width="22" height="22">
+      <div>
+        <h1>Ecosistema</h1>
+        <p class="tagline">Vida artificial evolutiva en tiempo real</p>
+      </div>
+    </div>
+    <div class="topbar-stats">
+      <div class="status" id="status" data-state="connecting" role="status" aria-live="polite">
+        <span class="status-dot"></span><span id="status-text">Conectando…</span>
+      </div>
+      <div class="kpi"><span class="kpi-label">Tick</span><span class="kpi-value num" id="tick">—</span></div>
+      <div class="kpi hide-sm" title="Tiempo de cómputo de un tick en el servidor">
+        <span class="kpi-label">Cómputo</span><span class="kpi-value num" id="tick-ms">—</span>
+      </div>
+      <a class="icon-link" href="https://github.com/dvchinx/simulation" target="_blank" rel="noopener" aria-label="Código fuente en GitHub">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+    </div>
+  </header>
 
-      <div class="meters-row">
-        <div class="meter">
-          <div class="meter-header">
-            <span class="meter-name">Herbív. A</span>
-            <span class="meter-count" id="herb-a-count">0</span>
+  <main class="layout">
+    <section class="stage" id="stage" aria-label="Mapa de la simulación">
+      <canvas id="canvas" tabindex="0" aria-label="Mapa interactivo: rueda o pellizco para zoom, arrastrar para mover, clic para inspeccionar una celda"></canvas>
+
+      <div class="toast-region" id="toasts" aria-live="polite"></div>
+
+      <aside class="inspector card" id="inspector" hidden>
+        <header class="inspector-header">
+          <img id="insp-icon" alt="" width="20" height="20" hidden>
+          <div>
+            <div class="inspector-title" id="insp-title">Celda</div>
+            <div class="inspector-sub num" id="insp-sub"></div>
           </div>
-          <div class="meter-bar-bg">
-            <div class="meter-bar" id="herb-a-bar" style="background:#00c864"></div>
-          </div>
+          <button class="icon-btn" id="insp-close" aria-label="Cerrar inspector">×</button>
+        </header>
+        <div id="insp-body"></div>
+      </aside>
+
+      <div class="map-controls" role="toolbar" aria-label="Controles del mapa">
+        <div class="segmented" role="group" aria-label="Vista">
+          <button class="seg-btn active" data-view="live" aria-pressed="true">Simulación</button>
+          <button class="seg-btn" data-view="biome" aria-pressed="false">Biomas</button>
         </div>
-
-        <div class="meter">
-          <div class="meter-header">
-            <span class="meter-name">Depred.</span>
-            <span class="meter-count" id="pred-count">0</span>
-          </div>
-          <div class="meter-bar-bg">
-            <div class="meter-bar" id="pred-bar" style="background:#dc3c3c"></div>
-          </div>
-        </div>
-
-        <div class="meter">
-          <div class="meter-header">
-            <span class="meter-name">Herbív. B</span>
-            <span class="meter-count" id="herb-b-count">0</span>
-          </div>
-          <div class="meter-bar-bg">
-            <div class="meter-bar" id="herb-b-bar" style="background:#3c8cdc"></div>
-          </div>
+        <div class="zoom-group">
+          <button class="icon-btn" id="zoom-in"  aria-label="Acercar" title="Acercar (+)">+</button>
+          <button class="icon-btn" id="zoom-out" aria-label="Alejar"  title="Alejar (−)">−</button>
+          <button class="icon-btn" id="zoom-fit" aria-label="Ajustar a la vista" title="Ajustar (0)">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg>
+          </button>
         </div>
       </div>
 
-      <div class="meters-row" style="margin-top:8px">
-        <div class="meter">
-          <div class="meter-header">
-            <span class="meter-name">Omnívoro</span>
-            <span class="meter-count" id="omni-count">0</span>
-          </div>
-          <div class="meter-bar-bg">
-            <div class="meter-bar" id="omni-bar" style="background:#a03cc8"></div>
-          </div>
+      <p class="map-hint" id="map-hint">Rueda o pellizco: zoom · Arrastrar: mover · Clic: inspeccionar</p>
+    </section>
+
+    <aside class="sidebar">
+      <section class="card">
+        <h2>Población</h2>
+        <ul class="species-list" id="species-list"></ul>
+        <div class="mini-stats">
+          <div><span class="dot" style="background:var(--infected)"></span>Infectados <strong class="num" id="infected-count">—</strong></div>
+          <div><span class="dot" style="background:var(--grass)"></span>Pasto <strong class="num" id="food-count">—</strong></div>
         </div>
+      </section>
 
-        <div class="meter">
-          <div class="meter-header">
-            <span class="meter-name">Infectados</span>
-            <span class="meter-count" id="infected-count">0</span>
-          </div>
-          <div class="meter-bar-bg">
-            <div class="meter-bar" id="infected-bar" style="background:#c8c800"></div>
-          </div>
+      <section class="card">
+        <div class="card-head">
+          <h2>Dinámica poblacional</h2>
+          <span class="card-note num" id="chart-range"></span>
         </div>
-
-        <div class="meter">
-          <div class="meter-header">
-            <span class="meter-name">Pasto</span>
-            <span class="meter-count" id="food-count">0</span>
-          </div>
-          <div class="meter-bar-bg">
-            <div class="meter-bar" id="food-bar" style="background:#1e5c1e"></div>
-          </div>
+        <div class="chart-wrap">
+          <canvas id="pop-chart" aria-label="Gráfica de población por especie a lo largo del tiempo" role="img"></canvas>
+          <div class="chart-tooltip" id="chart-tooltip" hidden></div>
         </div>
-      </div>
+        <div class="chart-legend" id="chart-legend"></div>
+      </section>
 
-      <div style="margin-top:12px">
-        <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Territorio</div>
-        <div style="display:flex;gap:16px;font-size:11px;color:#888">
-          <span><span style="color:#00c864">■</span> A: <span id="ter-a" style="color:#ccc">—</span></span>
-          <span><span style="color:#dc3c3c">■</span> P: <span id="ter-p" style="color:#ccc">—</span></span>
-          <span><span style="color:#3c8cdc">■</span> B: <span id="ter-b" style="color:#ccc">—</span></span>
+      <section class="card">
+        <h2>Ambiente</h2>
+        <div class="env-row">
+          <span class="season" id="season">—</span>
+          <span class="num" id="temp-value">—</span>
         </div>
-      </div>
+        <div class="gauge" aria-hidden="true"><span class="gauge-marker" id="temp-marker"></span></div>
+        <div class="gauge-labels"><span>Frío</span><span>Calor</span></div>
+        <dl class="countdowns">
+          <div><dt>Próximo incendio</dt><dd class="num" id="next-fire">—</dd></div>
+          <div><dt>Próxima inundación</dt><dd class="num" id="next-flood">—</dd></div>
+        </dl>
+      </section>
 
-      <div style="margin-top:12px">
-        <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Ambiente</div>
-        <div style="display:flex;gap:16px;font-size:11px;color:#888">
-          <span id="season-display" style="color:#ccc">—</span>
-          <span>Temperatura: <span id="temp-display" style="color:#ccc">—</span></span>
+      <section class="card">
+        <h2>Capas</h2>
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" data-layer="pheromone" checked><span>Feromonas</span></label>
+          <label class="toggle"><input type="checkbox" data-layer="territory" checked><span>Territorio</span>
+            <span class="toggle-meta num" id="territory-counts"></span></label>
+          <label class="toggle"><input type="checkbox" data-layer="border" checked><span>Bordes de bioma</span></label>
         </div>
-      </div>
+        <div class="biome-legend" id="biome-legend"></div>
+      </section>
 
-      <button id="heatmap-btn" disabled>Ver biomas</button>
-    </div>
+      <section class="card">
+        <h2>Evolución <span class="h2-sub">genes medios</span></h2>
+        <table class="evo-table" id="evo-table"></table>
+      </section>
 
-    <div class="sidebar-section" id="evolution-section">
-      <h2>Evolución — genes medios</h2>
-      <table class="evo-table">
-        <thead>
-          <tr>
-            <th></th>
-            <th style="color:#00c864">HerbA</th>
-            <th style="color:#dc3c3c">Pred</th>
-            <th style="color:#3c8cdc">HerbB</th>
-            <th style="color:#a03cc8">Omni</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Velocidad</td> <td id="ea-0">—</td><td id="ep-0">—</td><td id="eb-0">—</td><td id="eo-0">—</td></tr>
-          <tr><td>Reprod.</td>   <td id="ea-1">—</td><td id="ep-1">—</td><td id="eb-1">—</td><td id="eo-1">—</td></tr>
-          <tr><td>Eficienc.</td> <td id="ea-2">—</td><td id="ep-2">—</td><td id="eb-2">—</td><td id="eo-2">—</td></tr>
-          <tr><td>Visión</td>    <td id="ea-3">—</td><td id="ep-3">—</td><td id="eb-3">—</td><td id="eo-3">—</td></tr>
-          <tr><td>Mutación</td>  <td id="ea-4">—</td><td id="ep-4">—</td><td id="eb-4">—</td><td id="eo-4">—</td></tr>
-        </tbody>
-      </table>
-    </div>
+      <section class="card">
+        <h2>Eventos</h2>
+        <ol class="event-log" id="event-log"><li class="empty">Sin eventos todavía</li></ol>
+      </section>
 
-    <div class="sidebar-section">
-      <h2>Población</h2>
-      <canvas id="pop-chart" height="72"></canvas>
-      <div class="chart-legend">
-        <span><i style="background:#00c864"></i>Herb A</span>
-        <span><i style="background:#dc3c3c"></i>Depred.</span>
-        <span><i style="background:#3c8cdc"></i>Herb B</span>
-        <span><i style="background:#a03cc8"></i>Omni</span>
-      </div>
-    </div>
+      <details class="card about">
+        <summary><h2>Acerca del proyecto</h2></summary>
+        <p>Cada celda del grid de 200×200 es un organismo, pasto o terreno. Las reglas —movimiento, caza,
+          reproducción sexual con crossover, infección, estaciones, feromonas— están vectorizadas con NumPy
+          y se aplican en cada tick en el servidor, que transmite el estado por WebSocket.</p>
+        <div class="changelog" id="changelog">Cargando changelog…</div>
+      </details>
+    </aside>
+  </main>
 
-    <div id="changelog-section">
-      <h2>Changelog</h2>
-      <div id="changelog">Cargando...</div>
-    </div>
-  </div>
-
-  <!-- Inspector de celda -->
-  <div id="inspector" class="hidden">
-    <div class="insp-header">
-      <span class="insp-title" id="insp-title">Celda</span>
-      <button class="insp-close" id="insp-close">×</button>
-    </div>
-    <div id="insp-body"></div>
-  </div>
-
-  <div id="status">Conectando...</div>
   <script src="client.js"></script>
 </body>
 </html>
