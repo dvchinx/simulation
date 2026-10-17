@@ -1,13 +1,8 @@
 import numpy as np
 from config import (
-    GRID_WIDTH, GRID_HEIGHT,
-    INITIAL_POPULATION, INITIAL_ENERGY,
-    HERBIVORE_B_POPULATION, HERBIVORE_B_INITIAL_ENERGY,
-    PREDATOR_POPULATION, PREDATOR_INITIAL_ENERGY,
-    OMNI_POPULATION, OMNI_INITIAL_ENERGY,
-    INITIAL_FOOD_DENSITY, INFECTION_START_COUNT,
-    N_GENES, GENOME_MIN, GENOME_MAX,
-    GENOME_HERBIVORE, GENOME_PREDATOR, GENOME_OMNIVORE, GENOME_INIT_NOISE,
+    GRID_WIDTH, GRID_HEIGHT, SPECIES,
+    INITIAL_POPULATION, HERBIVORE_B_POPULATION, PREDATOR_POPULATION, OMNI_POPULATION,
+    INITIAL_FOOD_DENSITY, INFECTION_START_COUNT, N_GENES,
     PHEROMONE_RENDER_THRESHOLD, TERRITORY_RENDER_THRESHOLD,
     DISTURBANCE_THRESHOLD,
 )
@@ -19,190 +14,150 @@ from rules import temperature as temperature_rule
 from rules import diffusion as diffusion_rule
 from rules import disturbances as disturbances_rule
 from rules import omnivore as omnivore_rule
+from rules import migration as migration_rule
+from rules.common import dominant_layer
+
+_SHAPE = (GRID_HEIGHT, GRID_WIDTH)
+
+# Orden de aplicación de las reglas en cada tick
+RULES = (
+    temperature_rule,    # actualiza local_temperature por estación
+    disturbances_rule,   # fuego/inundación periódicos
+    food_rule,           # comer + regen con bioma/temp/nutriente
+    diffusion_rule,      # difusión del gradiente de nutriente
+    pheromone_rule,
+    territory_rule,
+    flocking,
+    predation,
+    omnivore_rule,
+    infection_rule,
+    random_walk,
+    aging,
+    reproduction,
+    migration_rule,      # grupo fundador si una especie lleva tiempo extinta
+)
+
+_INITIAL_POPULATIONS = {
+    1: INITIAL_POPULATION,
+    3: HERBIVORE_B_POPULATION,
+    2: PREDATOR_POPULATION,
+    4: OMNI_POPULATION,
+}
+
+
+def _biome_border(biome):
+    """Celdas en el límite entre dos biomas (estático: se calcula una vez).
+    Solo se marca el lado inferior/derecho para que el contorno mida 1 celda."""
+    border = np.zeros(biome.shape, dtype=bool)
+    border[1:]    |= biome[1:]    != biome[:-1]
+    border[:, 1:] |= biome[:, 1:] != biome[:, :-1]
+    return border
 
 
 def create_state():
-    total = GRID_WIDTH * GRID_HEIGHT
-
     # Fase 5: generar terreno y biomas antes de colocar organismos
     terrain_grid, biome_grid = terrain_rule.generate()
-    terrain_flat = terrain_grid.flatten()
-    non_rock = np.where(terrain_flat != terrain_rule.TERRAIN_ROCK)[0]
+    walkable = terrain_grid.ravel() != terrain_rule.TERRAIN_ROCK
 
-    flat = np.zeros(total, dtype=np.uint8)
+    layers = {
+        "species":  np.zeros(_SHAPE, dtype=np.uint8),
+        "energy":   np.zeros(_SHAPE, dtype=np.uint8),
+        "age":      np.zeros(_SHAPE, dtype=np.uint8),
+        "infected": np.zeros(_SHAPE, dtype=np.uint8),
+        "gender":   np.zeros(_SHAPE, dtype=np.uint8),
+        "genome":   np.zeros((*_SHAPE, N_GENES), dtype=np.float32),
+    }
 
-    # herbívoros A — solo en celdas no-roca
-    idx_a = np.random.choice(non_rock, min(INITIAL_POPULATION, len(non_rock)), replace=False)
-    flat[idx_a] = 1
-
-    # herbívoros B
-    available = np.where((flat == 0) & (terrain_flat != terrain_rule.TERRAIN_ROCK))[0]
-    idx_b = np.random.choice(available, min(HERBIVORE_B_POPULATION, len(available)), replace=False)
-    flat[idx_b] = 3
-
-    # depredadores
-    available = np.where((flat == 0) & (terrain_flat != terrain_rule.TERRAIN_ROCK))[0]
-    idx_p = np.random.choice(available, min(PREDATOR_POPULATION, len(available)), replace=False)
-    flat[idx_p] = 2
-
-    # omnívoros
-    available = np.where((flat == 0) & (terrain_flat != terrain_rule.TERRAIN_ROCK))[0]
-    idx_o = np.random.choice(available, min(OMNI_POPULATION, len(available)), replace=False)
-    flat[idx_o] = 4
-
-    species = flat.reshape((GRID_HEIGHT, GRID_WIDTH))
-
-    energy = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
-    energy[species == 1] = INITIAL_ENERGY
-    energy[species == 2] = PREDATOR_INITIAL_ENERGY
-    energy[species == 3] = HERBIVORE_B_INITIAL_ENERGY
-    energy[species == 4] = OMNI_INITIAL_ENERGY
-
-    age = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
+    # Organismos en celdas libres y no-roca; edades iniciales escalonadas para
+    # que la cohorte fundadora no muera de vejez en el mismo tick
+    for sp_id, count in _INITIAL_POPULATIONS.items():
+        available = np.flatnonzero((layers["species"].ravel() == 0) & walkable)
+        chosen = np.random.choice(available, min(count, len(available)), replace=False)
+        ages = np.random.randint(0, SPECIES[sp_id]["max_age"] // 2, len(chosen))
+        migration_rule.spawn(layers, chosen, sp_id, age=ages)
 
     # pasto inicial — solo en celdas vacías y no-roca
-    food_candidates = np.where((species.flatten() == 0) & (terrain_flat != terrain_rule.TERRAIN_ROCK))[0]
+    food_candidates = np.flatnonzero((layers["species"].ravel() == 0) & walkable)
     n_food = int(len(food_candidates) * INITIAL_FOOD_DENSITY)
-    chosen = np.random.choice(food_candidates, min(n_food, len(food_candidates)), replace=False)
-    food_flat = np.zeros(total, dtype=np.uint8)
-    food_flat[chosen] = 1
-    food = food_flat.reshape((GRID_HEIGHT, GRID_WIDTH))
+    food = np.zeros(GRID_HEIGHT * GRID_WIDTH, dtype=np.uint8)
+    food[np.random.choice(food_candidates, n_food, replace=False)] = 1
 
     # infección inicial en algunos herbívoros
-    infected = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
-    herb_pos = np.argwhere((species == 1) | (species == 3))
-    if len(herb_pos) >= INFECTION_START_COUNT:
-        seeds = np.random.choice(len(herb_pos), INFECTION_START_COUNT, replace=False)
-        for i in seeds:
-            infected[herb_pos[i, 0], herb_pos[i, 1]] = 1
-
-    # genoma con variación inicial
-    genome = np.zeros((GRID_HEIGHT, GRID_WIDTH, N_GENES), dtype=np.float32)
-    for sp_id, defaults in [(1, GENOME_HERBIVORE), (2, GENOME_PREDATOR), (3, GENOME_HERBIVORE), (4, GENOME_OMNIVORE)]:
-        mask = species == sp_id
-        n = int(np.sum(mask))
-        if n > 0:
-            noise = np.random.randn(n, N_GENES).astype(np.float32) * GENOME_INIT_NOISE
-            genome[mask] = np.clip(defaults + noise, GENOME_MIN, GENOME_MAX)
-
-    # género inicial: 1=macho, 2=hembra, asignado aleatoriamente a todos los organismos
-    gender = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
-    alive_mask = species > 0
-    gender[alive_mask] = np.random.randint(1, 3, int(np.sum(alive_mask)), dtype=np.uint8)
-
-    # Fase 4
-    pheromone = np.zeros((GRID_HEIGHT, GRID_WIDTH, 3), dtype=np.float32)
-    territory  = np.zeros((GRID_HEIGHT, GRID_WIDTH, 3), dtype=np.float32)
-    flock_a    = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
-    flock_b    = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
-    flock_pred = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
-    flock_omni = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
-
-    # Fase 5
-    nutrient = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32)
-    fire     = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32)
-    flood    = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32)
+    herb_idx = np.flatnonzero(np.isin(layers["species"], (1, 3)))
+    if len(herb_idx) >= INFECTION_START_COUNT:
+        seeds = np.random.choice(herb_idx, INFECTION_START_COUNT, replace=False)
+        layers["infected"].ravel()[seeds] = 1
 
     return {
-        "species":            species,
-        "energy":             energy,
-        "age":                age,
-        "food":               food,
-        "infected":           infected,
-        "genome":             genome,
-        "gender":             gender,
-        "pheromone":          pheromone,
-        "territory":          territory,
-        "flock_a":            flock_a,
-        "flock_b":            flock_b,
-        "flock_pred":         flock_pred,
-        "flock_omni":         flock_omni,
+        **layers,
+        "food":       food.reshape(_SHAPE),
+        # Fase 4
+        "pheromone":  np.zeros((*_SHAPE, 3), dtype=np.float32),
+        "territory":  np.zeros((*_SHAPE, 3), dtype=np.float32),
+        "flock_a":    np.zeros((*_SHAPE, 4), dtype=np.float32),
+        "flock_b":    np.zeros((*_SHAPE, 4), dtype=np.float32),
+        "flock_pred": np.zeros((*_SHAPE, 4), dtype=np.float32),
+        "flock_omni": np.zeros((*_SHAPE, 4), dtype=np.float32),
         # Fase 5
-        "terrain":            terrain_grid,
-        "biome":              biome_grid,
-        "nutrient":           nutrient,
-        "fire":               fire,
-        "flood":              flood,
+        "terrain":      terrain_grid,
+        "biome":        biome_grid,
+        "biome_border": _biome_border(biome_grid),
+        "nutrient":     np.zeros(_SHAPE, dtype=np.float32),
+        "fire":         np.zeros(_SHAPE, dtype=np.float32),
+        "flood":        np.zeros(_SHAPE, dtype=np.float32),
         "tick_count":         0,
         "global_temperature": 0.0,
-        "local_temperature":  np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32),
+        "local_temperature":  np.zeros(_SHAPE, dtype=np.float32),
+        "extinct_since":      {},
+        "events":             [],
     }
 
 
 def tick(state):
-    state = {**state, "tick_count": state.get("tick_count", 0) + 1}
-    state = temperature_rule.apply(state)    # actualiza local_temperature por estación
-    state = disturbances_rule.apply(state)   # fuego/inundación periódicos
-    state = food_rule.apply(state)           # comer + regen con bioma/temp/nutriente
-    state = diffusion_rule.apply(state)      # difusión del gradiente de nutriente
-    state = pheromone_rule.apply(state)
-    state = territory_rule.apply(state)
-    state = flocking.apply(state)
-    state = predation.apply(state)
-    state = omnivore_rule.apply(state)
-    state = infection_rule.apply(state)
-    state = random_walk.apply(state)
-    state = aging.apply(state)
-    state = reproduction.apply(state)
+    state = {**state, "tick_count": state.get("tick_count", 0) + 1, "events": []}
+    for rule in RULES:
+        state = rule.apply(state)
     return state
 
 
 def build_render(state):
-    species  = state["species"]
-    infected = state["infected"]
-    render   = species.copy()
+    """Un byte por celda con el código visual de mayor prioridad (ver
+    SPECIES_COLORS en config.py). Orden, de menor a mayor: terreno → territorio
+    → feromona → pasto → organismos; en celdas vacías, bordes de bioma →
+    inundación → fuego."""
+    species = state["species"]
+    render  = species.copy()
+    empty   = species == 0
 
-    # overlay de infectados
-    render[(species == 1) & (infected > 0)] = 5
-    render[(species == 3) & (infected > 0)] = 6
-    render[(species == 4) & (infected > 0)] = 7
+    # overlay de infectados: 1→5, 3→6, 4→7
+    infected = state["infected"] > 0
+    render[infected & (species == 1)] = 5
+    render[infected & (species == 3)] = 6
+    render[infected & (species == 4)] = 7
 
     # pasto en celdas sin organismo
-    render[(state["food"] > 0) & (species == 0)] = 10
+    render[empty & (state["food"] > 0)] = 10
 
-    # feromonas en celdas vacías sin pasto
-    if "pheromone" in state:
-        ph = state["pheromone"]
-        ph_max   = np.max(ph, axis=2)
-        ph_which = np.argmax(ph, axis=2)
-        visible_ph = (render == 0) & (ph_max >= PHEROMONE_RENDER_THRESHOLD)
-        render[visible_ph & (ph_which == 0)] = 11
-        render[visible_ph & (ph_which == 1)] = 12
-        render[visible_ph & (ph_which == 2)] = 13
+    # feromonas y, debajo, territorio: código base + capa dominante
+    for key, threshold, base in (("pheromone", PHEROMONE_RENDER_THRESHOLD, 11),
+                                 ("territory", TERRITORY_RENDER_THRESHOLD, 20)):
+        if key in state:
+            strength, which = dominant_layer(state[key])
+            visible = (render == 0) & (strength >= threshold)
+            render[visible] = base + which[visible]
 
-    # territorio debajo de las feromonas
-    if "territory" in state:
-        ter = state["territory"]
-        ter_max   = np.max(ter, axis=2)
-        ter_which = np.argmax(ter, axis=2)
-        visible_ter = (render == 0) & (ter_max >= TERRITORY_RENDER_THRESHOLD)
-        render[visible_ter & (ter_which == 0)] = 20
-        render[visible_ter & (ter_which == 1)] = 21
-        render[visible_ter & (ter_which == 2)] = 22
-
-    # Fase 5: terreno visible en celdas sin nada encima
+    # Fase 5: terreno visible en celdas sin nada encima (1→30, 2→31, 3→32)
     if "terrain" in state:
         t = state["terrain"]
-        empty = render == 0
-        render[empty & (t == 1)] = 30  # agua
-        render[empty & (t == 2)] = 31  # roca (siempre vacía)
-        render[empty & (t == 3)] = 32  # pantano
+        bare = (render == 0) & (t > 0)
+        render[bare] = 29 + t[bare]
 
-    # Fase 5: contornos de bioma — visibles sobre fondo en celdas sin organismo
-    if "biome" in state:
-        biome  = state["biome"]
-        border = (
-            (np.roll(biome, -1, axis=1) != biome) |
-            (np.roll(biome,  1, axis=1) != biome) |
-            (np.roll(biome, -1, axis=0) != biome) |
-            (np.roll(biome,  1, axis=0) != biome)
-        )
-        render[(species == 0) & border] = 50
-
-    # Fase 5: perturbaciones — prioridad máxima sobre el fondo en celdas vacías
+    # Fase 5: contornos de bioma y perturbaciones — prioridad sobre el fondo en celdas vacías
+    if "biome_border" in state:
+        render[empty & state["biome_border"]] = 50
     if "flood" in state:
-        render[(species == 0) & (state["flood"] >= DISTURBANCE_THRESHOLD)] = 41
+        render[empty & (state["flood"] >= DISTURBANCE_THRESHOLD)] = 41
     if "fire" in state:
-        render[(species == 0) & (state["fire"]  >= DISTURBANCE_THRESHOLD)] = 40
+        render[empty & (state["fire"] >= DISTURBANCE_THRESHOLD)] = 40
 
     return render

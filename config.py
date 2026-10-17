@@ -2,13 +2,13 @@ import numpy as np
 
 GRID_WIDTH = 200
 GRID_HEIGHT = 200
-FPS = 1
+FPS = 4                            # ticks por segundo por defecto (SIM_FPS lo sobrescribe)
 
 # --- Herbívoro A (presa verde) ---
 INITIAL_POPULATION = 450
 INITIAL_ENERGY = 30
 MOVE_ENERGY_COST = 2
-MAX_ENERGY = 100
+MAX_ENERGY = 255                   # tope de energía de los herbívoros
 FOOD_ENERGY_GAIN = 20
 MAX_AGE = 150
 
@@ -24,18 +24,15 @@ HERBIVORE_B_BIOME_MULT = np.array([0.6, 1.8, 1.8, 0.6], dtype=np.float32)
 PREDATOR_POPULATION = 60           # mayor inicial para soportar reproducción sexual
 PREDATOR_INITIAL_ENERGY = 50
 PREDATOR_MOVE_COST = 2             # igual al herbívoro — sobrevive mejor en escasez
-PREDATOR_MAX_ENERGY = 120
-PREDATOR_REPRODUCE_ENERGY = 115    # requiere 2 cazas seguidas, no 1
-PREDATOR_ENERGY_FROM_PREY = 60
+PREDATOR_MAX_ENERGY = 200          # holgura sobre el umbral reproductivo (+ penalización por temperatura)
+PREDATOR_ENERGY_FROM_PREY = 40     # menor ganancia por presa: evita que el depredador arrase a los herbívoros
 PREDATOR_MAX_AGE = 120             # más tiempo para sobrevivir períodos de escasez
-PREDATOR_VISION_RANGE = 4          # radio menor → refugio espacial para las presas
-PREDATOR_MATE_SEEK_MULT = 1.0      # sin boost extra: el radio de búsqueda de pareja ya resuelve el emparejamiento
 
 # --- Omnívoro (morado) ---
 OMNI_POPULATION       = 80
 OMNI_INITIAL_ENERGY   = 40
 OMNI_MOVE_COST        = 2
-OMNI_MAX_ENERGY       = 110
+OMNI_MAX_ENERGY       = 140
 OMNI_ENERGY_FROM_PREY = 30    # menor que el depredador
 OMNI_FOOD_EFFICIENCY  = 0.25  # menor eficiencia de pasto: evita que domine sobre las demás especies
 OMNI_MAX_AGE          = 130
@@ -52,6 +49,16 @@ INFECTION_CLEAR_PROB = 0.01        # recuperación más lenta → endémica
 
 # --- Reproducción ---
 MATE_SEARCH_RADIUS = 3   # radio (celdas) para detectar pareja, no solo adyacencia directa
+# Las especies escasas (depredador, omnívoro) rastrean pareja desde más lejos;
+# sin esto casi nunca coinciden dos individuos fértiles (efecto Allee) y se extinguen.
+MATE_SEARCH_RADIUS_BY_SPECIES = {1: MATE_SEARCH_RADIUS, 2: 8, 3: MATE_SEARCH_RADIUS, 4: 12}
+
+# --- Migración (efecto rescate) ---
+# Si una especie lleva MIGRATION_DELAY ticks extinta, llega un grupo fundador
+# desde fuera del mapa. Mantiene viva la demo y reproduce dinámicas de metapoblación.
+MIGRATION_DELAY  = 120
+MIGRATION_GROUP  = {1: 80, 2: 16, 3: 80, 4: 16}
+MIGRATION_RADIUS = 8
 
 # --- Genoma (Fase 3) ---
 N_GENES = 5
@@ -69,6 +76,19 @@ GENOME_HERBIVORE    = np.array([0.9, 100.0, 1.0, 2.0, 0.05], dtype=np.float32)
 GENOME_PREDATOR     = np.array([1.0, 115.0, 1.0, 4.0, 0.05], dtype=np.float32)
 GENOME_OMNIVORE     = np.array([0.8,  90.0, 0.6, 3.0, 0.05], dtype=np.float32)
 GENOME_INIT_NOISE   = np.array([0.08,  12.0, 0.10, 0.5, 0.015], dtype=np.float32)
+GENE_NAMES = ["Velocidad", "Reprod.", "Eficiencia", "Visión", "Mutación"]
+
+# --- Registro de especies: fuente única para simulación, servidor y cliente ---
+SPECIES = {
+    1: {"key": "herb_a",   "name": "Herbívoro A", "initial_energy": INITIAL_ENERGY,
+        "max_energy": MAX_ENERGY,          "max_age": MAX_AGE,          "genome": GENOME_HERBIVORE},
+    2: {"key": "predator", "name": "Depredador",  "initial_energy": PREDATOR_INITIAL_ENERGY,
+        "max_energy": PREDATOR_MAX_ENERGY, "max_age": PREDATOR_MAX_AGE, "genome": GENOME_PREDATOR},
+    3: {"key": "herb_b",   "name": "Herbívoro B", "initial_energy": HERBIVORE_B_INITIAL_ENERGY,
+        "max_energy": MAX_ENERGY,          "max_age": MAX_AGE,          "genome": GENOME_HERBIVORE},
+    4: {"key": "omnivore", "name": "Omnívoro",    "initial_energy": OMNI_INITIAL_ENERGY,
+        "max_energy": OMNI_MAX_ENERGY,     "max_age": OMNI_MAX_AGE,     "genome": GENOME_OMNIVORE},
+}
 
 SPECIES_COLORS = {
     0:  [20,  20,  20 ],  # vacío

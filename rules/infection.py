@@ -1,5 +1,6 @@
 import numpy as np
 from config import INFECTION_ENERGY_DRAIN, INFECTION_SPREAD_PROB, INFECTION_CLEAR_PROB
+from rules.common import neighbor_sum
 
 
 def apply(state):
@@ -16,12 +17,8 @@ def apply(state):
         energy[draining].astype(np.int16) - INFECTION_ENERGY_DRAIN, 0
     ).astype(np.uint8)
 
-    # contar vecinos infectados (sin wrap-around: pad con ceros en los bordes)
-    i_mask = is_infected.astype(np.float32)
-    neighbor_count = (
-        np.roll(i_mask,  1, axis=0) + np.roll(i_mask, -1, axis=0) +
-        np.roll(i_mask,  1, axis=1) + np.roll(i_mask, -1, axis=1)
-    )
+    # contar vecinos infectados (sin wrap-around: bordes absorbentes)
+    neighbor_count = neighbor_sum(is_infected.astype(np.uint8))
 
     # propagar a organismos susceptibles sanos adyacentes a al menos un infectado
     can_catch = susceptible & ~is_infected & (neighbor_count > 0)

@@ -1,120 +1,110 @@
 import numpy as np
 from config import (
     GRID_WIDTH, GRID_HEIGHT,
-    INITIAL_ENERGY, PREDATOR_INITIAL_ENERGY, OMNI_INITIAL_ENERGY,
-    N_GENES, GENOME_MIN, GENOME_MAX,
+    SPECIES, N_GENES, GENOME_MIN, GENOME_MAX,
     GENE_REPRO_ENERGY, GENE_MUTATION_RATE,
-    TEMP_REPRO_PENALTY, MATE_SEARCH_RADIUS,
+    TEMP_REPRO_PENALTY, MATE_SEARCH_RADIUS_BY_SPECIES,
 )
+from rules.common import DIRECTIONS, TERRAIN_ROCK, clip_positions, first_claims
 
-_DIRECTIONS = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]], dtype=np.int32)
 
-# rejillas de índice estáticas (200×200) para lookup de vecinos sin loops
-_ROWS, _COLS = np.mgrid[0:GRID_HEIGHT, 0:GRID_WIDTH]
-
-# offsets dentro de MATE_SEARCH_RADIUS (excluyendo el propio origen), ordenados por distancia
-_MATE_OFFSETS = sorted(
-    (
+def _mate_offsets(radius):
+    """Offsets dentro del radio (excluyendo el origen), ordenados por distancia."""
+    offsets = [
         (dy, dx)
-        for dy in range(-MATE_SEARCH_RADIUS, MATE_SEARCH_RADIUS + 1)
-        for dx in range(-MATE_SEARCH_RADIUS, MATE_SEARCH_RADIUS + 1)
-        if (dy, dx) != (0, 0) and dy * dy + dx * dx <= MATE_SEARCH_RADIUS ** 2
-    ),
-    key=lambda o: o[0] ** 2 + o[1] ** 2,
-)
+        for dy in range(-radius, radius + 1)
+        for dx in range(-radius, radius + 1)
+        if (dy, dx) != (0, 0) and dy * dy + dx * dx <= radius * radius
+    ]
+    return np.array(sorted(offsets, key=lambda o: o[0] ** 2 + o[1] ** 2), dtype=np.int32)
+
+
+_MATE_OFFSETS = {sp: _mate_offsets(r) for sp, r in MATE_SEARCH_RADIUS_BY_SPECIES.items()}
+
+def _find_partners(parents, parent_gender, fertile_gender, offsets):
+    """Para cada progenitor fértil busca la pareja fértil de género opuesto más
+    cercana dentro del radio de búsqueda. Trabaja sobre (n_fértiles, n_offsets)
+    en vez de sobre la grilla completa.
+
+    Devuelve (máscara de quién tiene pareja, posiciones de la pareja)."""
+    ny = parents[:, 0, None] + offsets[None, :, 0]
+    nx = parents[:, 1, None] + offsets[None, :, 1]
+    inside = (ny >= 0) & (ny < GRID_HEIGHT) & (nx >= 0) & (nx < GRID_WIDTH)
+    g = fertile_gender[np.clip(ny, 0, GRID_HEIGHT - 1), np.clip(nx, 0, GRID_WIDTH - 1)]
+    match = inside & (g > 0) & (g != parent_gender[:, None])
+
+    has_partner = match.any(axis=1)
+    first = np.argmax(match, axis=1)  # offsets ordenados → pareja más cercana
+    rows = np.arange(len(parents))
+    partners = np.stack([ny[rows, first], nx[rows, first]], axis=1)
+    return has_partner, partners
 
 
 def apply(state):
     species  = state["species"]
-    energy   = state["energy"]
-    age      = state["age"]
-    infected = state["infected"]
     genome   = state["genome"]
     gender   = state["gender"]
+    infected = state["infected"]
     terrain  = state.get("terrain")
 
     new_species  = species.copy()
-    new_energy   = energy.copy()
-    new_age      = age.copy()
+    new_energy   = state["energy"].copy()
+    new_age      = state["age"].copy()
     new_infected = infected.copy()
     new_genome   = genome.copy()
     new_gender   = gender.copy()
 
-    repro_thresh = genome[:, :, GENE_REPRO_ENERGY].astype(np.float32)
+    # Umbral de reproducción individual (gen) + penalización por temperatura extrema
+    repro_thresh = genome[:, :, GENE_REPRO_ENERGY]
     if "local_temperature" in state:
         repro_thresh = repro_thresh + np.abs(state["local_temperature"]) * TEMP_REPRO_PENALTY
+    can_breed = (new_energy >= repro_thresh) & (gender > 0)
 
     # --- Todas las especies: reproducción sexual con crossover ---
-    for sp_id, init_energy in [(1, INITIAL_ENERGY), (2, PREDATOR_INITIAL_ENERGY), (3, INITIAL_ENERGY), (4, OMNI_INITIAL_ENERGY)]:
-        fertile = (
-            (new_species == sp_id) &
-            (new_energy.astype(np.float32) >= repro_thresh) &
-            (gender > 0)
-        )
-
-        # Buscar pareja de género opuesto dentro de MATE_SEARCH_RADIUS celdas
-        partner_found  = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=bool)
-        partner_genome = np.zeros((GRID_HEIGHT, GRID_WIDTH, N_GENES), dtype=np.float32)
-
-        for dy, dx in _MATE_OFFSETS:
-            ny = np.clip(_ROWS + dy, 0, GRID_HEIGHT - 1)
-            nx = np.clip(_COLS + dx, 0, GRID_WIDTH  - 1)
-            has_mate = (
-                fertile & ~partner_found &
-                fertile[ny, nx] &
-                (gender[ny, nx] != gender) &
-                (gender > 0) & (gender[ny, nx] > 0)
-            )
-            partner_found [has_mate] = True
-            partner_genome[has_mate] = genome[ny[has_mate], nx[has_mate]]
-
-        ready = fertile & partner_found
-        parents = np.argwhere(ready)
-        if len(parents) == 0:
+    for sp_id, spec in SPECIES.items():
+        init_energy = spec["initial_energy"]
+        fertile = can_breed & (species == sp_id)
+        parents = np.argwhere(fertile)
+        if len(parents) < 2:
             continue
 
-        m       = len(parents)
-        targets = parents + _DIRECTIONS[np.random.randint(0, 4, m)]
-        targets[:, 0] = np.clip(targets[:, 0], 0, GRID_HEIGHT - 1)
-        targets[:, 1] = np.clip(targets[:, 1], 0, GRID_WIDTH  - 1)
+        fertile_gender = np.where(fertile, gender, 0)
+        parent_gender  = gender[parents[:, 0], parents[:, 1]]
+        has_partner, partners = _find_partners(parents, parent_gender, fertile_gender, _MATE_OFFSETS[sp_id])
+        parents, partners = parents[has_partner], partners[has_partner]
+        m = len(parents)
+        if m == 0:
+            continue
 
+        # La cría nace en una celda adyacente aleatoria, libre y transitable
+        targets = clip_positions(parents + DIRECTIONS[np.random.randint(0, 4, m)],
+                                 GRID_HEIGHT, GRID_WIDTH)
         can_birth = new_species[targets[:, 0], targets[:, 1]] == 0
         if terrain is not None:
-            can_birth &= terrain[targets[:, 0], targets[:, 1]] != 2
+            can_birth &= terrain[targets[:, 0], targets[:, 1]] != TERRAIN_ROCK
+        birthing = can_birth & first_claims(targets[:, 0] * GRID_WIDTH + targets[:, 1], can_birth)
 
-        target_ids = targets[:, 0] * GRID_WIDTH + targets[:, 1]
-        _, first_occ = np.unique(target_ids, return_index=True)
-        no_conflict  = np.zeros(m, dtype=bool)
-        no_conflict[first_occ] = True
-
-        birthing = can_birth & no_conflict
-        n_born = int(np.sum(birthing))
+        n_born = int(np.count_nonzero(birthing))
         if n_born == 0:
             continue
-
-        new_species[targets[birthing, 0], targets[birthing, 1]] = sp_id
-        new_energy [targets[birthing, 0], targets[birthing, 1]] = init_energy
-        new_age    [targets[birthing, 0], targets[birthing, 1]] = 0
-        new_energy [parents[birthing, 0], parents[birthing, 1]] = init_energy
-
-        # género aleatorio 50/50 para el hijo
-        child_gender = np.random.randint(1, 3, n_born, dtype=np.uint8)
-        new_gender[targets[birthing, 0], targets[birthing, 1]] = child_gender
+        parents, partners, targets = parents[birthing], partners[birthing], targets[birthing]
+        ty, tx = targets[:, 0], targets[:, 1]
 
         # crossover uniforme por gen + mutación con tasa promedio de ambos padres
-        pa_g = genome         [parents[birthing, 0], parents[birthing, 1]]
-        pb_g = partner_genome [parents[birthing, 0], parents[birthing, 1]]
-        cross_mask = np.random.random((n_born, N_GENES)) < 0.5
-        child_g = np.where(cross_mask, pa_g, pb_g).astype(np.float32)
+        pa_g = genome[parents[:, 0], parents[:, 1]]
+        pb_g = genome[partners[:, 0], partners[:, 1]]
+        child_g = np.where(np.random.random((n_born, N_GENES)) < 0.5, pa_g, pb_g)
         avg_mut = (pa_g[:, GENE_MUTATION_RATE] + pb_g[:, GENE_MUTATION_RATE]) / 2.0
-        noise   = (np.random.randn(n_born, N_GENES) * avg_mut[:, None]).astype(np.float32)
-        child_g = np.clip(child_g + noise, GENOME_MIN, GENOME_MAX)
-        new_genome[targets[birthing, 0], targets[birthing, 1]] = child_g
+        child_g = child_g + np.random.randn(n_born, N_GENES).astype(np.float32) * avg_mut[:, None]
 
-        # infección heredada del padre (herbívoros y omnívoros; depredador es inmune)
-        if sp_id in (1, 3, 4):
-            parent_inf = infected[parents[birthing, 0], parents[birthing, 1]]
-            new_infected[targets[birthing, 0], targets[birthing, 1]] = parent_inf
+        new_species [ty, tx] = sp_id
+        new_energy  [ty, tx] = init_energy
+        new_age     [ty, tx] = 0
+        new_gender  [ty, tx] = np.random.randint(1, 3, n_born, dtype=np.uint8)
+        new_genome  [ty, tx] = np.clip(child_g, GENOME_MIN, GENOME_MAX)
+        # infección heredada del progenitor (el depredador nunca está infectado)
+        new_infected[ty, tx] = infected[parents[:, 0], parents[:, 1]]
+        new_energy  [parents[:, 0], parents[:, 1]] = init_energy
 
     return {**state,
             "species":  new_species,

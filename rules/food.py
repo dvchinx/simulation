@@ -3,8 +3,9 @@ from config import (
     FOOD_ENERGY_GAIN, FOOD_REGEN_RATE, GENE_FOOD_EFFICIENCY,
     BIOME_REGEN_MULT, TEMP_REGEN_FACTOR,
     NUTRIENT_REGEN_BOOST, OMNI_FOOD_EFFICIENCY,
-    HERBIVORE_B_BIOME_MULT,
+    HERBIVORE_B_BIOME_MULT, MAX_ENERGY, OMNI_MAX_ENERGY,
 )
+from rules.common import TERRAIN_ROCK
 
 
 def apply(state):
@@ -24,7 +25,7 @@ def apply(state):
             efficiency = np.where(is_b, efficiency * HERBIVORE_B_BIOME_MULT[biome[eating_herb]], efficiency)
         energy[eating_herb] = np.minimum(
             energy[eating_herb].astype(np.float32) + FOOD_ENERGY_GAIN * efficiency,
-            255.0,
+            MAX_ENERGY,
         ).astype(np.uint8)
     food[eating_herb] = 0
 
@@ -34,7 +35,7 @@ def apply(state):
         efficiency = genome[eating_omni, GENE_FOOD_EFFICIENCY] * OMNI_FOOD_EFFICIENCY
         energy[eating_omni] = np.minimum(
             energy[eating_omni].astype(np.float32) + FOOD_ENERGY_GAIN * efficiency,
-            255.0,
+            OMNI_MAX_ENERGY,
         ).astype(np.uint8)
     food[eating_omni] = 0
 
@@ -57,7 +58,7 @@ def apply(state):
 
     regen_candidates = (species == 0) & (food == 0)
     if "terrain" in state:
-        regen_candidates &= state["terrain"] != 2  # sin pasto en roca
+        regen_candidates &= state["terrain"] != TERRAIN_ROCK  # sin pasto en roca
 
     food[regen_candidates & (np.random.random(food.shape) < regen_rate)] = 1
 

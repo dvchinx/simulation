@@ -4,54 +4,39 @@ from config import (
     FLOCK_RADIUS, FLOCK_COHESION_WEIGHT,
     FLOCK_SEPARATION_RADIUS, FLOCK_SEPARATION_WEIGHT,
 )
+from rules.common import DIRECTIONS
 
-# N, S, W, E — mismo orden que random_walk._DIRECTIONS
-_DIRS = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]], dtype=np.int32)
+# (clave de estado, id de especie) — todas se calculan en un único array apilado
+_FLOCKS = (("flock_a", 1), ("flock_pred", 2), ("flock_b", 3), ("flock_omni", 4))
+_PAD = max(FLOCK_RADIUS, FLOCK_SEPARATION_RADIUS)
 
-
-def _scores_for_species(density):
-    """
-    Devuelve array (H, W, 4) de puntuaciones de cardumen para organismos de la especie dada.
-    Positivo = atracción (cohesión), negativo = repulsión (separación).
-    """
-    scores = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
-
-    for d_idx, (dy, dx) in enumerate(_DIRS):
-        # Cohesión: suma ponderada de congéneres en la dirección d a distancias 1..FLOCK_RADIUS
-        cohesion = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32)
-        for r in range(1, FLOCK_RADIUS + 1):
-            # np.roll(-dy*r, axis=0) trae a (y,x) el valor que estaba en (y+dy*r, x)
-            shifted = np.roll(
-                np.roll(density, -dy * r, axis=0),
-                -dx * r, axis=1,
-            )
-            cohesion += shifted / r
-
-        # Separación: presencia de congéneres dentro de FLOCK_SEPARATION_RADIUS
-        separation = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.float32)
-        for r in range(1, FLOCK_SEPARATION_RADIUS + 1):
-            shifted = np.roll(
-                np.roll(density, -dy * r, axis=0),
-                -dx * r, axis=1,
-            )
-            separation += shifted
-
-        scores[:, :, d_idx] = (
-            FLOCK_COHESION_WEIGHT   * cohesion
-            - FLOCK_SEPARATION_WEIGHT * separation
-        )
-
-    return scores
+# Peso por distancia r en la dirección d: cohesión 1/r (r <= FLOCK_RADIUS)
+# menos separación (r <= FLOCK_SEPARATION_RADIUS)
+_RADIUS_WEIGHTS = [
+    (r,
+     (FLOCK_COHESION_WEIGHT / r if r <= FLOCK_RADIUS else 0.0)
+     - (FLOCK_SEPARATION_WEIGHT if r <= FLOCK_SEPARATION_RADIUS else 0.0))
+    for r in range(1, _PAD + 1)
+]
 
 
 def apply(state):
+    """
+    Campos (H, W, 4) de puntuación direccional de cardumen por especie.
+    Positivo = atracción (cohesión), negativo = repulsión (separación).
+    Los bordes no hacen wrap: fuera del grid no hay congéneres.
+    """
     species = state["species"]
+    density = np.stack([species == sp for _, sp in _FLOCKS]).astype(np.float32)
+    padded  = np.pad(density, ((0, 0), (_PAD, _PAD), (_PAD, _PAD)))
 
-    flock_a    = _scores_for_species((species == 1).astype(np.float32))
-    flock_b    = _scores_for_species((species == 3).astype(np.float32))
-    flock_pred = _scores_for_species((species == 2).astype(np.float32))
-    flock_omni = _scores_for_species((species == 4).astype(np.float32))
+    scores = np.zeros((len(_FLOCKS), GRID_HEIGHT, GRID_WIDTH, 4), dtype=np.float32)
+    for d_idx, (dy, dx) in enumerate(DIRECTIONS):
+        acc = scores[..., d_idx]
+        for r, weight in _RADIUS_WEIGHTS:
+            # trae a (y, x) la densidad que está en (y + dy·r, x + dx·r)
+            y0 = _PAD + dy * r
+            x0 = _PAD + dx * r
+            acc += weight * padded[:, y0:y0 + GRID_HEIGHT, x0:x0 + GRID_WIDTH]
 
-    return {**state,
-            "flock_a": flock_a, "flock_b": flock_b,
-            "flock_pred": flock_pred, "flock_omni": flock_omni}
+    return {**state, **{key: scores[i] for i, (key, _) in enumerate(_FLOCKS)}}

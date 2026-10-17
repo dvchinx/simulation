@@ -1,28 +1,17 @@
 import numpy as np
-from config import MAX_AGE, PREDATOR_MAX_AGE, OMNI_MAX_AGE
+from config import SPECIES
+from rules.common import copy_layers, kill
+
+# Edad máxima indexada por id de especie (0 = vacío)
+_MAX_AGE_BY_SPECIES = np.array([255] + [SPECIES[sp]["max_age"] for sp in sorted(SPECIES)], dtype=np.uint8)
 
 
 def apply(state):
-    species  = state["species"].copy()
-    age      = state["age"].copy()
-    infected = state["infected"].copy()
-    genome   = state["genome"].copy()
-    gender   = state["gender"].copy()
+    layers = copy_layers(state)
+    species, age = layers["species"], layers["age"]
 
     alive = species > 0
     age[alive] = np.minimum(age[alive].astype(np.int16) + 1, 255).astype(np.uint8)
 
-    too_old = (
-        ((species == 1) & (age >= MAX_AGE)) |
-        ((species == 2) & (age >= PREDATOR_MAX_AGE)) |
-        ((species == 3) & (age >= MAX_AGE)) |
-        ((species == 4) & (age >= OMNI_MAX_AGE))
-    )
-    species [too_old] = 0
-    age     [too_old] = 0
-    infected[too_old] = 0
-    genome  [too_old] = 0
-    gender  [too_old] = 0
-
-    return {**state, "species": species, "age": age,
-            "infected": infected, "genome": genome, "gender": gender}
+    kill(layers, alive & (age >= _MAX_AGE_BY_SPECIES[species]))
+    return {**state, **layers}
