@@ -1,5 +1,27 @@
 # Changelog
 
+## v4.0.0 — 2026-10-16
+
+- **Rendimiento del servidor (139 → ~21 ms por tick):** la reproducción busca pareja solo entre los individuos fértiles (`(n, offsets)`) en vez de recorrer el grid completo por cada offset (113 → 2,4 ms). El cardumen usa slicing sobre un array con padding en lugar de 256 `np.roll` por tick. El render del frame y las estadísticas bajan de 12 a 4 ms reemplazando `max(axis=2)` por `np.maximum` encadenado y precalculando los bordes de bioma.
+
+- **Servidor no bloqueante:** el tick y el render corren en `asyncio.to_thread`, el loop programa por deadline (el periodo ya no se alarga con el costo del tick) y `broadcast` salta frames a los clientes lentos en lugar de bloquear al resto. Nuevo historial de población para clientes recién conectados, configuración por variables de entorno (`SIM_FPS`, `SIM_PORT`, `SIM_SEED`) y 4 FPS por defecto.
+
+- **Corrección: la edad no viajaba con el organismo.** Al moverse, cada organismo tomaba la edad de la celda destino, por lo que la muerte por vejez casi nunca ocurría. Ahora todas las capas (especie, energía, edad, infección, genoma, género) se mueven y se limpian juntas mediante `rules/common.py`.
+
+- **Corrección: el omnívoro perdía la infección al moverse,** y las muertes por hambre, incendio o inundación dejaban datos huérfanos en celdas vacías.
+
+- **Rebalanceo de cazadores:** con la vejez funcionando, depredadores y omnívoros se extinguían porque su tope de energía estaba por debajo del umbral reproductivo y rara vez encontraban pareja. Nuevo radio de búsqueda de pareja por especie (8 para el depredador, 12 para el omnívoro), topes de energía 200/140, 40 de energía por presa y edades iniciales escalonadas.
+
+- **Migración (efecto rescate):** si una especie lleva 120 ticks extinta, llega un grupo fundador a una zona aleatoria. Los incendios, inundaciones y migraciones se publican como eventos.
+
+- **Cliente rediseñado:** nueva interfaz con cabecera de estado en vivo, tarjetas de población con tendencia, gráfica con tooltip y escala logarítmica, termómetro estacional con cuenta regresiva de perturbaciones, capas activables, registro de eventos con "ir al lugar", avisos y animación sobre el mapa.
+
+- **Render del cliente:** a zoom bajo el frame se rasteriza vía LUT `Uint32` en un `ImageData` y se dibuja con un único `drawImage` (antes, hasta 40.000 por frame). En pantallas pequeñas los organismos ahora son visibles a zoom 1. Soporte HiDPI, Pointer Events unificados (ratón, táctil, lápiz), atajos de teclado (`+`, `-`, `0`, flechas, `Esc`) y reconexión con backoff exponencial.
+
+- **Inspector en vivo:** la celda seleccionada se resalta en el mapa y se actualiza cada tick, con barras de genes normalizadas y datos del entorno (bioma, terreno, temperatura local, pasto, nutriente).
+
+- **Proyecto:** README con arquitectura y benchmark, `scripts/benchmark.py`, 24 tests nuevos (incluidas regresiones de los bugs anteriores), CI en GitHub Actions, `docker-compose.yml`, imagen del servidor sin root y nginx con gzip y caché.
+
 ## v3.2.0 — 2026-06-22
 
 - **Reproducción sexual con crossover genómico:** los herbívoros A, B y omnívoros requieren encontrarse con un congénere del género opuesto (macho/hembra) en una celda adyacente, y ambos deben superar su umbral de energía. El genoma del hijo surge de un crossover uniforme — cada gen se hereda aleatoriamente de uno u otro padre — seguido de mutación con la tasa promedio de ambos padres. El depredador mantiene reproducción asexual. Cada organismo lleva un género asignado aleatoriamente al nacer; el género viaja con el organismo al moverse.

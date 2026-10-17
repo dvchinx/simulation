@@ -1,0 +1,19 @@
+# Entorno local completo: http://localhost:8080 (el cliente se conecta a ws://localhost:8765)
+services:
+  sim:
+    build: .
+    environment:
+      SIM_FPS: "4"
+    ports:
+      - "8765:8765"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "8080:80"
+    depends_on:
+      - sim
+    restart: unless-stopped
