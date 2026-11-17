@@ -6,9 +6,10 @@ from config import (
     TERRITORY_ATTRACTION, TERRITORY_FEAR_WEIGHT,
     TEMP_SPEED_FACTOR,
     NUTRIENT_CHEMOTAXIS,
+    PREY_FLEE_WEIGHT,
 )
 from rules.common import (
-    DIRECTIONS, TERRAIN_ROCK, clip_positions, first_claims, scan_directions,
+    DIRECTIONS, OPPOSITE, TERRAIN_ROCK, clip_positions, first_claims, scan_directions,
     copy_layers, move, metabolic_cost, pay_and_starve,
 )
 
@@ -33,6 +34,11 @@ def apply(state):
 
     # --- Puntuación base: comida visible (quimiotaxis primaria) ---
     dir_scores = scan_directions(positions, herb_vision, [(food > 0, 1.0)])
+
+    # --- Huida: alejarse del cazador visible más cercano en cada dirección ---
+    if PREY_FLEE_WEIGHT:
+        threat = scan_directions(positions, herb_vision, [((species == 2) | (species == 4), 1.0)])
+        dir_scores += PREY_FLEE_WEIGHT * (threat[:, OPPOSITE] - threat)
 
     nutrient  = state.get("nutrient")
     pheromone = state.get("pheromone")
@@ -84,9 +90,9 @@ def apply(state):
     layers = copy_layers(state)
     move(layers, positions[moving], targets[moving])
 
-    # --- Costo metabólico: proporcional al gen de velocidad y al terreno ---
+    # --- Costo metabólico: gen de velocidad × terreno + mantenimiento de la eficiencia ---
     alive = (layers["species"] == 1) | (layers["species"] == 3)
-    cost = metabolic_cost(MOVE_ENERGY_COST * layers["genome"][:, :, GENE_SPEED], terrain)
+    cost = metabolic_cost(MOVE_ENERGY_COST * layers["genome"][:, :, GENE_SPEED], terrain, layers["genome"])
     pay_and_starve(layers, alive, cost)
 
     return {**state, **layers}

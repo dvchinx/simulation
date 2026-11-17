@@ -3,7 +3,8 @@ from config import (
     FOOD_ENERGY_GAIN, FOOD_REGEN_RATE, GENE_FOOD_EFFICIENCY,
     BIOME_REGEN_MULT, TEMP_REGEN_FACTOR,
     NUTRIENT_REGEN_BOOST, OMNI_FOOD_EFFICIENCY,
-    HERBIVORE_B_BIOME_MULT, MAX_ENERGY, OMNI_MAX_ENERGY,
+    HERBIVORE_A_BIOME_MULT, HERBIVORE_B_BIOME_MULT, MAX_ENERGY,
+    OMNI_MAX_ENERGY,
 )
 from rules.common import TERRAIN_ROCK
 
@@ -19,22 +20,29 @@ def apply(state):
     eating_herb = ((species == 1) | (species == 3)) & (food > 0)
     if np.any(eating_herb):
         efficiency = genome[eating_herb, GENE_FOOD_EFFICIENCY]
-        # Herbívoro B tiene nicho distinto: mejor en biomas duros, peor en templado/tropical
+        # Cada herbívoro rinde según su nicho de bioma (ver HERBIVORE_*_BIOME_MULT).
+        # El gen de eficiencia es una especialización en el pasto de su nicho:
+        # fuera de él (multiplicador < 1) no aporta. Si aportara, la evolución
+        # de la eficiencia borraría los nichos y uno excluiría al otro.
         if biome is not None:
             is_b = species[eating_herb] == 3
-            efficiency = np.where(is_b, efficiency * HERBIVORE_B_BIOME_MULT[biome[eating_herb]], efficiency)
+            here = biome[eating_herb]
+            niche = np.where(is_b, HERBIVORE_B_BIOME_MULT[here], HERBIVORE_A_BIOME_MULT[here])
+            efficiency = niche * np.where(niche >= 1.0, efficiency, 1.0)
         energy[eating_herb] = np.minimum(
             energy[eating_herb].astype(np.float32) + FOOD_ENERGY_GAIN * efficiency,
             MAX_ENERGY,
         ).astype(np.uint8)
     food[eating_herb] = 0
 
-    # Omnívoro come pasto con menor eficiencia
+    # Omnívoro: el pasto es un complemento de rendimiento fijo, por debajo de su
+    # costo metabólico. Su gen de eficiencia solo mejora la carne (rules/hunting.py):
+    # si también escalara el pasto, evolucionaría hasta ser un pastador mejor que
+    # los herbívoros, que además se los come.
     eating_omni = (species == 4) & (food > 0)
     if np.any(eating_omni):
-        efficiency = genome[eating_omni, GENE_FOOD_EFFICIENCY] * OMNI_FOOD_EFFICIENCY
         energy[eating_omni] = np.minimum(
-            energy[eating_omni].astype(np.float32) + FOOD_ENERGY_GAIN * efficiency,
+            energy[eating_omni].astype(np.float32) + FOOD_ENERGY_GAIN * OMNI_FOOD_EFFICIENCY,
             OMNI_MAX_ENERGY,
         ).astype(np.uint8)
     food[eating_omni] = 0

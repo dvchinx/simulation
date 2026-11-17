@@ -11,9 +11,10 @@ from config import (  # noqa: E402
     GRID_WIDTH, GRID_HEIGHT, N_GENES, SPECIES, SPECIES_COLORS,
     INITIAL_POPULATION, HERBIVORE_B_POPULATION, PREDATOR_POPULATION, OMNI_POPULATION,
     GENE_REPRO_ENERGY, GENE_SPEED, MIGRATION_DELAY, MATE_SEARCH_RADIUS_BY_SPECIES,
+    GENE_FOOD_EFFICIENCY, REPRO_OVERHEAD, CROWDING_LIMIT,
 )
 from rules import aging, migration, predation, omnivore, random_walk, reproduction  # noqa: E402
-from rules.common import ORGANISM_LAYERS, first_claims, neighbor_sum  # noqa: E402
+from rules.common import ORGANISM_LAYERS, first_claims, metabolic_cost, neighbor_sum  # noqa: E402
 
 VALID_SPECIES = {0, *SPECIES}
 SHAPE = (GRID_HEIGHT, GRID_WIDTH)
@@ -278,3 +279,69 @@ def test_neighbor_sum_does_not_wrap():
     n = neighbor_sum(a)
     assert n[0, 1] == 1 and n[1, 0] == 1
     assert n[3, 0] == 0 and n[0, 3] == 0
+
+
+# ---------------------------------------------------------------------------
+# Equilibrio ecológico
+# ---------------------------------------------------------------------------
+
+def test_reproduction_conserves_energy():
+    """Regresión: al progenitor se le fijaba la energía inicial tras criar, lo
+    que con umbrales bajos creaba energía de la nada."""
+    state = empty_world()
+    _fertile_pair(state, 4, 1)
+    total_before = int(state["energy"].sum())
+    after = reproduction.apply(state)
+    born = int(np.count_nonzero(after["species"] == 4)) - 2
+    assert born > 0
+    assert int(after["energy"].sum()) == total_before - born * REPRO_OVERHEAD
+
+
+def test_sated_predator_does_not_kill():
+    state = empty_world()
+    place(state, 2, 5, 5, energy=SPECIES[2]["max_energy"])
+    place(state, 1, 5, 6)
+    after = predation.apply(state)
+    assert after["species"][5, 6] == 1
+
+
+def test_herbivore_flees_visible_predator():
+    state = empty_world()
+    place(state, 1, 100, 100, g0=1.0, g3=4.0)  # siempre se mueve, ve 4 celdas
+    place(state, 2, 100, 103, energy=SPECIES[2]["max_energy"])  # saciado: no se acerca
+    after = random_walk.apply(state)
+    assert after["species"][100, 99] == 1
+
+
+def test_efficiency_has_metabolic_upkeep():
+    genome = np.zeros((*SHAPE, N_GENES), dtype=np.float32)
+    genome[..., GENE_FOOD_EFFICIENCY] = 1.0
+    cheap = metabolic_cost(np.full(SHAPE, 1.0), None, genome).mean()
+    genome[..., GENE_FOOD_EFFICIENCY] = 2.5
+    costly = metabolic_cost(np.full(SHAPE, 1.0), None, genome).mean()
+    assert costly > cheap + 0.5
+
+
+def test_predator_rarely_catches_rare_prey():
+    """Cambio de presa: con 1 herbívoro B entre cientos de A, el depredador
+    casi nunca lo captura (refugio de la especie rara)."""
+    caught = 0
+    for _ in range(20):
+        state = empty_world()
+        for i in range(300):
+            place(state, 1, 150 + i // 90, 10 + i % 90 * 2)
+        place(state, 2, 5, 5, energy=50)
+        place(state, 3, 5, 6)
+        after = predation.apply(state)
+        caught += after["species"][5, 6] == 2
+    assert caught <= 3
+
+
+def test_crowded_herbivores_do_not_breed():
+    state = empty_world()
+    _fertile_pair(state, 1, 1)
+    crowd = [(100 + dy, 100 + dx) for dy in (-2, -1, 1, 2) for dx in (-2, -1, 0, 1, 2)]
+    for r, c in crowd[:CROWDING_LIMIT[1] + 1]:
+        place(state, 1, r, c, energy=10)
+    after = reproduction.apply(state)
+    assert np.count_nonzero(after["species"] == 1) == np.count_nonzero(state["species"] == 1)
