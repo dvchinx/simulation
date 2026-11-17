@@ -15,17 +15,20 @@ MAX_AGE = 150
 # --- Herbívoro B (competidor azul) ---
 HERBIVORE_B_POPULATION = 450
 HERBIVORE_B_INITIAL_ENERGY = 30
-# Nicho distinto al herbívoro A: mejor eficiencia de pasto en biomas duros (ártico/desierto),
-# peor en templado/tropical — evita exclusión competitiva total entre ambos herbívoros.
-# [templado, ártico, desierto, tropical]
-HERBIVORE_B_BIOME_MULT = np.array([0.6, 1.8, 1.8, 0.6], dtype=np.float32)
+
+# Nichos de los herbívoros: multiplicador de la energía del pasto por bioma
+# [templado, ártico, desierto, tropical]. A domina los biomas fértiles y B los
+# duros; fuera de su nicho cada uno apenas se sostiene. Junto con el hacinamiento
+# (CROWDING_LIMIT) y el cambio de presa (PREY_SWITCHING) evita que uno excluya al otro.
+HERBIVORE_A_BIOME_MULT = np.array([1.2, 0.3, 0.3, 1.2], dtype=np.float32)
+HERBIVORE_B_BIOME_MULT = np.array([0.3, 1.8, 1.8, 0.3], dtype=np.float32)
 
 # --- Depredador (rojo) ---
 PREDATOR_POPULATION = 60           # mayor inicial para soportar reproducción sexual
 PREDATOR_INITIAL_ENERGY = 50
 PREDATOR_MOVE_COST = 2             # igual al herbívoro — sobrevive mejor en escasez
 PREDATOR_MAX_ENERGY = 200          # holgura sobre el umbral reproductivo (+ penalización por temperatura)
-PREDATOR_ENERGY_FROM_PREY = 40     # menor ganancia por presa: evita que el depredador arrase a los herbívoros
+PREDATOR_ENERGY_FROM_PREY = 45     # igual que el omnívoro: con más o menos, uno de los dos cazadores desplaza al otro
 PREDATOR_MAX_AGE = 120             # más tiempo para sobrevivir períodos de escasez
 
 # --- Omnívoro (morado) ---
@@ -33,8 +36,9 @@ OMNI_POPULATION       = 80
 OMNI_INITIAL_ENERGY   = 40
 OMNI_MOVE_COST        = 2
 OMNI_MAX_ENERGY       = 140
-OMNI_ENERGY_FROM_PREY = 30    # menor que el depredador
-OMNI_FOOD_EFFICIENCY  = 0.25  # menor eficiencia de pasto: evita que domine sobre las demás especies
+OMNI_ENERGY_FROM_PREY = 45    # ver PREDATOR_ENERGY_FROM_PREY
+OMNI_FOOD_EFFICIENCY  = 0.15  # pasto rinde 20×0.15 = 3 fijo (no evoluciona): complemento que no
+                              # alcanza para vivir solo de pasto (costo ~2,6/tick)
 OMNI_MAX_AGE          = 130
 
 # --- Pasto ---
@@ -52,6 +56,34 @@ MATE_SEARCH_RADIUS = 3   # radio (celdas) para detectar pareja, no solo adyacenc
 # Las especies escasas (depredador, omnívoro) rastrean pareja desde más lejos;
 # sin esto casi nunca coinciden dos individuos fértiles (efecto Allee) y se extinguen.
 MATE_SEARCH_RADIUS_BY_SPECIES = {1: MATE_SEARCH_RADIUS, 2: 8, 3: MATE_SEARCH_RADIUS, 4: 12}
+
+# Costo de la cría: el progenitor transfiere la energía inicial de la cría más un
+# gasto de gestación. Antes la energía del progenitor se *fijaba* a la inicial, lo
+# que con umbrales bajos creaba energía de la nada (62 → 40 + 40) y premiaba
+# evolutivamente reproducirse con poca energía.
+REPRO_OVERHEAD = 10
+
+# --- Compromisos evolutivos (trade-offs) ---
+# Mantener un aparato digestivo eficiente cuesta energía cada tick. Sin este costo
+# el gen de eficiencia sube al máximo en todas las especies y el omnívoro termina
+# siendo mejor herbívoro que los herbívoros (exclusión competitiva).
+EFFICIENCY_UPKEEP = 0.6            # energía por tick: UPKEEP × eficiencia ** UPKEEP_EXP
+EFFICIENCY_UPKEEP_EXP = 2.0        # cuadrático: rendimientos decrecientes → óptimo intermedio
+
+# --- Comportamiento depredador-presa ---
+# Un cazador saciado no mata: evita la caza en exceso cuando ya no puede
+# almacenar más energía.
+HUNTER_SATIATION = 0.8             # fracción del tope de energía a partir de la cual no caza
+# Los herbívoros huyen de los cazadores que ven (depredador y omnívoro).
+PREY_FLEE_WEIGHT = 1.5             # peso de la huida frente a la atracción por el pasto
+# Cambio de presa: 0 lo desactiva; 1 = captura plena cuando cada especie de presa
+# está en igual proporción, y proporcional a su abundancia relativa por debajo.
+PREY_SWITCHING = 1.0
+
+# Competencia intraespecífica (hacinamiento): un herbívoro con más de LIMIT
+# congéneres en su vecindario de (2·RADIUS+1)² celdas no se reproduce.
+CROWDING_RADIUS = 2
+CROWDING_LIMIT = {1: 8, 3: 8}
 
 # --- Migración (efecto rescate) ---
 # Si una especie lleva MIGRATION_DELAY ticks extinta, llega un grupo fundador
@@ -74,7 +106,7 @@ GENOME_MAX = np.array([1.0, 220.0, 3.0, 12.0, 0.400], dtype=np.float32)
 # (speed, repro_energy, food_efficiency, vision, mutation_rate)
 GENOME_HERBIVORE    = np.array([0.9, 100.0, 1.0, 2.0, 0.05], dtype=np.float32)
 GENOME_PREDATOR     = np.array([1.0, 115.0, 1.0, 4.0, 0.05], dtype=np.float32)
-GENOME_OMNIVORE     = np.array([0.8,  90.0, 0.6, 3.0, 0.05], dtype=np.float32)
+GENOME_OMNIVORE     = np.array([0.8,  90.0, 1.0, 4.0, 0.05], dtype=np.float32)
 GENOME_INIT_NOISE   = np.array([0.08,  12.0, 0.10, 0.5, 0.015], dtype=np.float32)
 GENE_NAMES = ["Velocidad", "Reprod.", "Eficiencia", "Visión", "Mutación"]
 

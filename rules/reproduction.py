@@ -3,9 +3,10 @@ from config import (
     GRID_WIDTH, GRID_HEIGHT,
     SPECIES, N_GENES, GENOME_MIN, GENOME_MAX,
     GENE_REPRO_ENERGY, GENE_MUTATION_RATE,
-    TEMP_REPRO_PENALTY, MATE_SEARCH_RADIUS_BY_SPECIES,
+    TEMP_REPRO_PENALTY, MATE_SEARCH_RADIUS_BY_SPECIES, REPRO_OVERHEAD,
+    CROWDING_RADIUS, CROWDING_LIMIT,
 )
-from rules.common import DIRECTIONS, TERRAIN_ROCK, clip_positions, first_claims
+from rules.common import DIRECTIONS, TERRAIN_ROCK, box_count, clip_positions, first_claims
 
 
 def _mate_offsets(radius):
@@ -63,7 +64,15 @@ def apply(state):
     # --- Todas las especies: reproducción sexual con crossover ---
     for sp_id, spec in SPECIES.items():
         init_energy = spec["initial_energy"]
-        fertile = can_breed & (species == sp_id)
+        # El progenitor paga la energía de la cría más la gestación y debe
+        # sobrevivir al parto
+        birth_cost = init_energy + REPRO_OVERHEAD
+        fertile = can_breed & (species == sp_id) & (new_energy > birth_cost)
+        # Competencia intraespecífica: con demasiados congéneres alrededor no
+        # hay cría. Cada especie se limita más a sí misma que a su competidora,
+        # lo que permite coexistir a los dos herbívoros (Lotka-Volterra).
+        if sp_id in CROWDING_LIMIT:
+            fertile &= box_count(species == sp_id, CROWDING_RADIUS) <= CROWDING_LIMIT[sp_id]
         parents = np.argwhere(fertile)
         if len(parents) < 2:
             continue
@@ -104,7 +113,7 @@ def apply(state):
         new_genome  [ty, tx] = np.clip(child_g, GENOME_MIN, GENOME_MAX)
         # infección heredada del progenitor (el depredador nunca está infectado)
         new_infected[ty, tx] = infected[parents[:, 0], parents[:, 1]]
-        new_energy  [parents[:, 0], parents[:, 1]] = init_energy
+        new_energy  [parents[:, 0], parents[:, 1]] -= birth_cost
 
     return {**state,
             "species":  new_species,

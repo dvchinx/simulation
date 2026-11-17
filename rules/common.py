@@ -1,10 +1,15 @@
 """Utilidades compartidas por las reglas: direcciones, desplazamientos sin wrap y
 movimiento/muerte de organismos manteniendo sincronizadas todas sus capas."""
 import numpy as np
-from config import TERRAIN_WATER_COST, TERRAIN_SWAMP_COST, GENOME_MAX, GENE_VISION
+from config import (
+    TERRAIN_WATER_COST, TERRAIN_SWAMP_COST, GENOME_MAX, GENE_VISION,
+    GENE_FOOD_EFFICIENCY, EFFICIENCY_UPKEEP, EFFICIENCY_UPKEEP_EXP,
+)
 
 # N, S, W, E — orden común a todas las reglas de movimiento
 DIRECTIONS = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]], dtype=np.int32)
+# Índice de la dirección opuesta a cada una de DIRECTIONS (N↔S, W↔E)
+OPPOSITE = np.array([1, 0, 3, 2])
 
 TERRAIN_ROCK = 2
 # Multiplicadores de costo metabólico por tipo de terreno [libre, agua, roca, pantano]
@@ -41,6 +46,17 @@ def neighbor_sum(arr):
     out[:, 1:]  += arr[:, :-1]
     out[:, :-1] += arr[:, 1:]
     return out
+
+
+def box_count(mask, radius):
+    """Número de celdas verdaderas en el cuadrado (2r+1)² alrededor de cada celda,
+    sin contar la propia. Tabla de sumas acumuladas: O(H·W) para cualquier radio."""
+    k = 2 * radius + 1
+    padded = np.pad(mask.astype(np.int32), radius)
+    integral = np.zeros((padded.shape[0] + 1, padded.shape[1] + 1), dtype=np.int32)
+    integral[1:, 1:] = padded.cumsum(0).cumsum(1)
+    total = integral[k:, k:] - integral[:-k, k:] - integral[k:, :-k] + integral[:-k, :-k]
+    return total - mask
 
 
 def dominant_layer(layer):
@@ -93,12 +109,18 @@ def kill(layers, mask):
         arr[mask] = 0
 
 
-def metabolic_cost(base_cost, terrain):
-    """Costo entero por celda (>= 1) aplicando el multiplicador de terreno."""
-    base = np.asarray(base_cost, dtype=np.float32)
-    if terrain is None:
-        return np.maximum(np.round(base).astype(np.int16), 1)
-    return np.maximum(np.round(base * TERRAIN_COST[terrain]).astype(np.int16), 1)
+def metabolic_cost(base_cost, terrain, genome=None):
+    """Costo entero por celda (>= 1): movimiento × terreno más el mantenimiento
+    del gen de eficiencia. El redondeo es estocástico para que los costos
+    fraccionarios (p. ej. 0,4 de mantenimiento) se paguen en promedio y no
+    desaparezcan al redondear a la energía entera."""
+    cost = np.asarray(base_cost, dtype=np.float32)
+    if terrain is not None:
+        cost = cost * TERRAIN_COST[terrain]
+    if genome is not None:
+        cost = cost + EFFICIENCY_UPKEEP * genome[..., GENE_FOOD_EFFICIENCY] ** EFFICIENCY_UPKEEP_EXP
+    cost = np.floor(cost + np.random.random(np.shape(cost))).astype(np.int16)
+    return np.maximum(cost, 1)
 
 
 def pay_and_starve(layers, alive, cost):

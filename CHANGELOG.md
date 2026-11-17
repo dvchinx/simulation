@@ -1,5 +1,21 @@
 # Changelog
 
+## v4.1.0 — 2026-11-16
+
+- **Equilibrio ecológico: los herbívoros ya no desaparecen.** Antes, hacia el tick ~1.800 el omnívoro evolucionaba hasta ser mejor pastador que los herbívoros (eficiencia 2,9, 4.500 individuos), los extinguía y el mundo quedaba en manos de depredador y omnívoro; las migraciones de rescate caían entre miles de cazadores y no prosperaban. Ahora, en semillas de validación a 6.000 ticks, los herbívoros nunca bajan de ~400 y ninguno de los dos necesita migraciones de rescate.
+
+- **Corrección: la reproducción creaba energía.** Al progenitor se le *fijaba* la energía inicial tras criar, de modo que con umbrales bajos (omnívoro: 62 → 40 + 40) cada parto generaba energía de la nada y la evolución premiaba reproducirse con poca energía. Ahora el progenitor paga la energía de la cría más un costo de gestación (`REPRO_OVERHEAD`).
+
+- **Compromisos evolutivos:** el gen de eficiencia cuesta un mantenimiento cuadrático por tick (`EFFICIENCY_UPKEEP`), con redondeo estocástico del costo metabólico para que los costos fraccionarios se paguen en promedio. En los herbívoros la eficiencia solo mejora el pasto de su propio nicho de bioma; en el omnívoro solo mejora la carne y el pasto le rinde una cantidad fija, por debajo de su costo metabólico.
+
+- **Comportamiento depredador-presa:** los herbívoros huyen de los cazadores que ven y el omnívoro huye del depredador (`PREY_FLEE_WEIGHT`); un cazador saciado no persigue ni mata (`HUNTER_SATIATION`); y el cazador captura peor a la presa rara (cambio de presa, `PREY_SWITCHING`), lo que evita la competencia aparente: el herbívoro abundante ya no sostiene cazadores que extinguen al escaso.
+
+- **Coexistencia de los dos herbívoros:** nichos de bioma más marcados para A (templado/tropical) y B (ártico/desierto) y competencia intraespecífica por hacinamiento (`CROWDING_LIMIT`): un herbívoro con demasiados congéneres alrededor no se reproduce, así la especie dominante se autolimita.
+
+- **Cazadores:** depredador y omnívoro ganan 45 de energía por presa (con valores distintos uno desplaza al otro); el omnívoro arranca con eficiencia 1,0 y visión 4.
+
+- **Costo:** el tick pasa de ~12 a ~27 ms en la máquina de desarrollo (escaneos de huida y más organismos vivos), muy por debajo del presupuesto de 250 ms a 4 FPS. 6 tests nuevos.
+
 ## v4.0.0 — 2026-10-16
 
 - **Rendimiento del servidor (139 → ~21 ms por tick):** la reproducción busca pareja solo entre los individuos fértiles (`(n, offsets)`) en vez de recorrer el grid completo por cada offset (113 → 2,4 ms). El cardumen usa slicing sobre un array con padding en lugar de 256 `np.roll` por tick. El render del frame y las estadísticas bajan de 12 a 4 ms reemplazando `max(axis=2)` por `np.maximum` encadenado y precalculando los bordes de bioma.

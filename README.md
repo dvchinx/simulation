@@ -10,9 +10,13 @@ cliente Canvas sin dependencias.
 ## Características
 
 - **Selección natural emergente.** Cinco genes por organismo (velocidad, umbral reproductivo, eficiencia
-  alimentaria, visión y tasa de mutación). Reproducción sexual con crossover uniforme y mutación.
+  alimentaria, visión y tasa de mutación). Reproducción sexual con crossover uniforme y mutación. Los genes
+  tienen costos: la eficiencia digestiva paga un mantenimiento cuadrático y criar transfiere energía real.
 - **Cadena trófica.** Pasto → herbívoros → omnívoro → depredador, con caza dirigida por visión y rastreo
   de feromonas. Ciclos depredador-presa visibles en la gráfica de población.
+- **Mecanismos de coexistencia.** Las presas huyen de los cazadores que ven, los cazadores saciados no
+  matan, el cazador captura peor a la presa rara (cambio de presa) y el hacinamiento frena la cría de la
+  especie dominante: los dos herbívoros coexisten en lugar de excluirse.
 - **Ambiente dinámico.** Biomas con nichos distintos, terreno (agua, roca, pantano), estaciones que
   modulan temperatura, movimiento y reproducción, difusión de nutrientes, incendios e inundaciones.
 - **Comportamiento colectivo.** Feromonas, cardumen (cohesión y separación) y territorio.

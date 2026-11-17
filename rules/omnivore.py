@@ -3,8 +3,8 @@ from rules.hunting import hunt
 
 
 def apply(state):
-    # Dieta mixta: prioriza herbívoros (1.2/dist) sobre pasto (0.8/dist).
-    # El pasto lo come en rules/food.py al pisarlo.
+    # Dieta mixta: prioriza herbívoros (1.2/dist) sobre pasto (0.8/dist) y huye
+    # del depredador. El pasto lo come en rules/food.py al pisarlo.
     return hunt(
         state,
         species_id=4,
@@ -15,4 +15,5 @@ def apply(state):
         max_energy=OMNI_MAX_ENERGY,
         move_cost=OMNI_MOVE_COST,
         flock_key="flock_omni",
+        threat_ids=(2,),
     )
